@@ -13,7 +13,10 @@ it('fails missing config in app metadata before any state bootstrap', async () =
 });
 it('selects the explicit app/account with stage-scoped state and rejects mismatched stage', async () => {
   selectExample();
-  expect(await root.app({ stage: 'test' })).toMatchObject({ name: 'supervisor', home: 'cloudflare', removal: 'remove', protect: false, providers: { cloudflare: { version: '6.24.0', accountId: '00000000000000000000000000000000' } } });
+  const app = await root.app({ stage: 'test' });
+  expect(app).toMatchObject({ name: 'supervisor', home: 'cloudflare', removal: 'remove', protect: false });
+  // Provider 6.x rejects `cloudflare:accountId`; the account is passed per resource.
+  expect(app.providers).toEqual({ cloudflare: { version: '6.24.0' } });
   await expect(root.app({ stage: 'production' })).rejects.toThrow('Values redacted');
 });
 it('allows only SDK metadata without config; run still fails closed', async () => {

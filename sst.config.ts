@@ -9,7 +9,9 @@ export default $config({
       name: config?.appName ?? 'supervisor', home: 'cloudflare',
       removal: input.stage === 'production' ? 'retain' : 'remove',
       protect: input.stage === 'production',
-      providers: { cloudflare: { version: '6.24.0', accountId: config?.accountId } },
+      // Cloudflare provider 6.x has no provider-level account key; every resource
+      // receives the validated account ID explicitly (see infra/supervisor.ts).
+      providers: { cloudflare: { version: '6.24.0' } },
     };
   },
   async run() {
