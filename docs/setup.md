@@ -203,7 +203,11 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
 ### Connect a client and verify
 
 1. Add `https://<mcp-host>/mcp` as a connector in the MCP client named in
-   `mcpClients` and sign in with a configured principal. If Access answers
+   `mcpClients` (or reconnect an existing connector). The client opens your
+   Cloudflare Access team login; sign in through one of `allowedIdps` with a
+   configured principal. Access then redirects back to the client's callback
+   and the client reports the connector as connected. On a new installation a
+   first `list_records` call returns an empty list. If Access answers
    `invalid_request` / `Redirect URI not allowed by application configuration`,
    copy the exact `redirect_uri` parameter from the failed authorization URL,
    add it unchanged (no wildcard) to that client's `callbackUris`, run
@@ -213,8 +217,6 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
 3. With the dashboard open, ask the client to create one record; it appears
    without a reload (WebSocket update).
 4. Ask the client to list records; the new record is returned.
-
-<!-- TODO: exact OAuth screens and callback observed in the first real client run. -->
 
 ## Resource and state boundary
 
