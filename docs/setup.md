@@ -213,10 +213,15 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
    add it unchanged (no wildcard) to that client's `callbackUris`, run
    `sst diff` and `sst deploy` again, and retry the sign-in. A client that was
    connected to an earlier installation may keep its previous callback.
-2. Open the dashboard host and sign in with the same identity.
-3. With the dashboard open, ask the client to create one record; it appears
-   without a reload (WebSocket update).
-4. Ask the client to list records; the new record is returned.
+2. Write one record: ask the client to call `upsert_record` with a new `id`
+   and `expectedRev: 0`. The response returns the record at rev 1. Repeating
+   the same create returns `rev_conflict` and changes nothing.
+3. Read it back independently: `get_record` for that `id` returns rev 1,
+   `list_records` includes it, and `get_audit` shows the write (revision 0 to 1
+   and the changed fields).
+4. Live updates: open the dashboard host, sign in with the same identity and
+   keep the page open. Write or update a record through the client; the change
+   appears without a reload (WebSocket update).
 
 ## Resource and state boundary
 
