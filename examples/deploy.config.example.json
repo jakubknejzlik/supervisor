@@ -1,0 +1,24 @@
+{
+  "appName": "supervisor",
+  "stage": "test",
+  "zoneId": "00000000000000000000000000000000",
+  "zoneName": "example.invalid",
+  "dashboardHostname": "dashboard.example.invalid",
+  "mcpHostname": "mcp.example.invalid",
+  "accessTeamDomain": "team-example.cloudflareaccess.com",
+  "principals": [
+    { "email": "reviewer@example.invalid", "capabilities": ["supervisor:read"] },
+    { "email": "editor@example.invalid", "capabilities": ["supervisor:read", "supervisor:write"] }
+  ],
+  "policy": { "requires": [], "excludes": [] },
+  "allowedIdps": ["onetimepin"],
+  "sessionDuration": "24h",
+  "oauthSessionDuration": "336h",
+  "oauthAccessTokenLifetime": "15m",
+  "mcpClients": [
+    { "client": "claude", "callbackUris": ["https://claude.ai/api/mcp/auth_callback"] }
+  ],
+  "allowLocalProbe": false,
+  "storeKey": "supervisor-store-v1",
+  "displayTimezone": "UTC"
+}

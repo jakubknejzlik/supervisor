@@ -1,0 +1,26 @@
+[
+  {
+    "id": "sample:welcome",
+    "expectedRev": 0,
+    "patch": {
+      "name": "Sample task",
+      "project": "sample",
+      "agent": "Sample agent",
+      "owner": "Sample operator",
+      "state": "running",
+      "stateLabel": "In progress",
+      "status": "Synthetic local development data",
+      "goal": "Verify the local dashboard",
+      "nextStep": "Inspect live updates",
+      "waitingOn": "",
+      "requestedFrom": [],
+      "links": {
+        "slack": [],
+        "changes": [],
+        "preview": [],
+        "issues": [],
+        "other": []
+      }
+    }
+  }
+]

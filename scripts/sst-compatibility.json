@@ -1,0 +1,16 @@
+[
+  {
+    "file": "src/components/cloudflare/helpers/compatibility.ts",
+    "before": "50f4ba6cc15e93cf88875a192e68da1e059b5731a314ad7f76d05ebd935b69ac",
+    "after": "83cbbfc0597a2b9e334b4dbaad3d81912f2e63e4c7a3c6b1deab4e1fcd41835c",
+    "old": "      | {\n          compatibilityDate?: Input<string>;\n          compatibilityFlags?: Input<Input<string>[]>;\n        }",
+    "replacement": "      | Pick<import(\"@pulumi/cloudflare\").WorkersScriptArgs, \"compatibilityDate\" | \"compatibilityFlags\">"
+  },
+  {
+    "file": "src/components/cloudflare/static-site.ts",
+    "before": "deb6639ec954351f541a31ff173f389852e76774d8113ee92700a6e162e20bd6",
+    "after": "22201f53a9d96fc842bd3464117243c090a558c3e9097ff58abe6b282fcbed37",
+    "old": "                  ...bindings,",
+    "replacement": "                  ...(bindings ?? []),"
+  }
+]

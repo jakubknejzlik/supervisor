@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "from": ".gitignore",
+      "to": ".gitignore"
+    },
+    {
+      "from": ".gitleaks.toml",
+      "to": ".gitleaks.toml"
+    },
+    {
+      "from": "LICENSE",
+      "to": "LICENSE"
+    },
+    {
+      "from": "README.md",
+      "to": "README.md"
+    },
+    {
+      "from": "apps/dashboard/README.md",
+      "to": "apps/dashboard/README.md"
+    },
+    {
+      "from": "apps/dashboard/index.html",
+      "to": "apps/dashboard/index.html"
+    },
+    {
+      "from": "apps/dashboard/package.json",
+      "to": "apps/dashboard/package.json"
+    },
+    {
+      "from": "apps/dashboard/public/favicon-review.svg",
+      "to": "apps/dashboard/public/favicon-review.svg"
+    },
+    {
+      "from": "apps/dashboard/public/favicon.svg",
+      "to": "apps/dashboard/public/favicon.svg"
+    },
+    {
+      "from": "apps/dashboard/src/app.js",
+      "to": "apps/dashboard/src/app.js"
+    },
+    {
+      "from": "apps/dashboard/src/browser.ts",
+      "to": "apps/dashboard/src/browser.ts"
+    },
+    {
+      "from": "apps/dashboard/src/style.css",
+      "to": "apps/dashboard/src/style.css"
+    },
+    {
+      "from": "apps/dashboard/test/client.test.mjs",
+      "to": "apps/dashboard/test/client.test.mjs"
+    },
+    {
+      "from": "apps/dashboard/test/e2e/i18n.spec.mjs",
+      "to": "apps/dashboard/test/e2e/i18n.spec.mjs"
+    },
+    {
+      "from": "apps/dashboard/test/e2e/live.spec.mjs",
+      "to": "apps/dashboard/test/e2e/live.spec.mjs"
+    },
+    {
+      "from": "apps/dashboard/test/e2e/screenshots.mjs",
+      "to": "apps/dashboard/test/e2e/screenshots.mjs"
+    },
+    {
+      "from": "apps/dashboard/test/i18n.test.mjs",
+      "to": "apps/dashboard/test/i18n.test.mjs"
+    },
+    {
+      "from": "apps/worker/README.md",
+      "to": "apps/worker/README.md"
+    },
+    {
+      "from": "apps/worker/package.json",
+      "to": "apps/worker/package.json"
+    },
+    {
+      "from": "apps/worker/src/auth.ts",
+      "to": "apps/worker/src/auth.ts"
+    },
+    {
+      "from": "apps/worker/src/dashboard.ts",
+      "to": "apps/worker/src/dashboard.ts"
+    },
+    {
+      "from": "apps/worker/src/store.ts",
+      "to": "apps/worker/src/store.ts"
+    },
+    {
+      "from": "apps/worker/src/worker.ts",
+      "to": "apps/worker/src/worker.ts"
+    },
+    {
+      "from": "apps/worker/test/dashboard.test.mjs",
+      "to": "apps/worker/test/dashboard.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/entry.ts",
+      "to": "apps/worker/test/entry.ts"
+    },
+    {
+      "from": "apps/worker/test/fixture.mjs",
+      "to": "apps/worker/test/fixture.mjs"
+    },
+    {
+      "from": "apps/worker/test/i18n.test.mjs",
+      "to": "apps/worker/test/i18n.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/live.test.mjs",
+      "to": "apps/worker/test/live.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/mcp.test.mjs",
+      "to": "apps/worker/test/mcp.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/remote.test.mjs",
+      "to": "apps/worker/test/remote.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/runtime.mjs",
+      "to": "apps/worker/test/runtime.mjs"
+    },
+    {
+      "from": "bun.lock",
+      "to": "bun.lock"
+    },
+    {
+      "from": "bunfig.toml",
+      "to": "bunfig.toml"
+    },
+    {
+      "from": "docs/build.md",
+      "to": "docs/build.md"
+    },
+    {
+      "from": "docs/export.md",
+      "to": "docs/export.md"
+    },
+    {
+      "from": "docs/mcp-contract.md",
+      "to": "docs/mcp-contract.md"
+    },
+    {
+      "from": "docs/setup.md",
+      "to": "docs/setup.md"
+    },
+    {
+      "from": "examples/deploy.config.example.json",
+      "to": "examples/deploy.config.example.json"
+    },
+    {
+      "from": "examples/sample-records.json",
+      "to": "examples/sample-records.json"
+    },
+    {
+      "from": "infra/compatibility.ts",
+      "to": "infra/compatibility.ts"
+    },
+    {
+      "from": "infra/config.ts",
+      "to": "infra/config.ts"
+    },
+    {
+      "from": "infra/package.json",
+      "to": "infra/package.json"
+    },
+    {
+      "from": "infra/supervisor.ts",
+      "to": "infra/supervisor.ts"
+    },
+    {
+      "from": "infra/test/compatibility.test.mjs",
+      "to": "infra/test/compatibility.test.mjs"
+    },
+    {
+      "from": "infra/test/config.test.mjs",
+      "to": "infra/test/config.test.mjs"
+    },
+    {
+      "from": "infra/test/empty-store.test.mjs",
+      "to": "infra/test/empty-store.test.mjs"
+    },
+    {
+      "from": "infra/test/graph.test.mjs",
+      "to": "infra/test/graph.test.mjs"
+    },
+    {
+      "from": "infra/test/root-config.test.mjs",
+      "to": "infra/test/root-config.test.mjs"
+    },
+    {
+      "from": "package.json",
+      "to": "package.json"
+    },
+    {
+      "from": "packages/core/package.json",
+      "to": "packages/core/package.json"
+    },
+    {
+      "from": "packages/core/src/canonical.ts",
+      "to": "packages/core/src/canonical.ts"
+    },
+    {
+      "from": "packages/core/src/i18n.ts",
+      "to": "packages/core/src/i18n.ts"
+    },
+    {
+      "from": "packages/core/src/identity.ts",
+      "to": "packages/core/src/identity.ts"
+    },
+    {
+      "from": "packages/core/src/locales/cs.ts",
+      "to": "packages/core/src/locales/cs.ts"
+    },
+    {
+      "from": "packages/core/src/locales/en.ts",
+      "to": "packages/core/src/locales/en.ts"
+    },
+    {
+      "from": "packages/core/src/schema.ts",
+      "to": "packages/core/src/schema.ts"
+    },
+    {
+      "from": "packages/core/test/canonical.test.mjs",
+      "to": "packages/core/test/canonical.test.mjs"
+    },
+    {
+      "from": "packages/core/test/i18n.test.mjs",
+      "to": "packages/core/test/i18n.test.mjs"
+    },
+    {
+      "from": "packages/core/test/identity.test.mjs",
+      "to": "packages/core/test/identity.test.mjs"
+    },
+    {
+      "from": "playwright.config.mjs",
+      "to": "playwright.config.mjs"
+    },
+    {
+      "from": "scripts/boundary-lib.mjs",
+      "to": "scripts/boundary-lib.mjs"
+    },
+    {
+      "from": "scripts/build.ts",
+      "to": "scripts/build.ts"
+    },
+    {
+      "from": "scripts/check-bundle.mjs",
+      "to": "scripts/check-bundle.mjs"
+    },
+    {
+      "from": "scripts/clean-export.ts",
+      "to": "scripts/clean-export.ts"
+    },
+    {
+      "from": "scripts/dev.ts",
+      "to": "scripts/dev.ts"
+    },
+    {
+      "from": "scripts/e2e-authorized.mjs",
+      "to": "scripts/e2e-authorized.mjs"
+    },
+    {
+      "from": "scripts/e2e-local.mjs",
+      "to": "scripts/e2e-local.mjs"
+    },
+    {
+      "from": "scripts/e2e-remote.mjs",
+      "to": "scripts/e2e-remote.mjs"
+    },
+    {
+      "from": "scripts/exercise.mjs",
+      "to": "scripts/exercise.mjs"
+    },
+    {
+      "from": "scripts/export-boundary.json",
+      "to": "scripts/export-boundary.json"
+    },
+    {
+      "from": "scripts/export-templates/boundary.yml",
+      "to": "scripts/export-templates/boundary.yml"
+    },
+    {
+      "from": "scripts/prepare-sst.ts",
+      "to": "scripts/prepare-sst.ts"
+    },
+    {
+      "from": "scripts/scan-public-history.mjs",
+      "to": "scripts/scan-public-history.mjs"
+    },
+    {
+      "from": "scripts/sst-compatibility.json",
+      "to": "scripts/sst-compatibility.json"
+    },
+    {
+      "from": "scripts/test/boundary.test.mjs",
+      "to": "scripts/test/boundary.test.mjs"
+    },
+    {
+      "from": "scripts/test/build.test.mjs",
+      "to": "scripts/test/build.test.mjs"
+    },
+    {
+      "from": "scripts/test/fixtures/synthetic-secret.txt",
+      "to": "scripts/test/fixtures/synthetic-secret.txt"
+    },
+    {
+      "from": "scripts/typecheck-infra.ts",
+      "to": "scripts/typecheck-infra.ts"
+    },
+    {
+      "from": "sst.config.ts",
+      "to": "sst.config.ts"
+    },
+    {
+      "from": "tsconfig.dashboard.json",
+      "to": "tsconfig.dashboard.json"
+    },
+    {
+      "from": "tsconfig.infra.json",
+      "to": "tsconfig.infra.json"
+    },
+    {
+      "from": "tsconfig.json",
+      "to": "tsconfig.json"
+    },
+    {
+      "from": "tsconfig.tools.json",
+      "to": "tsconfig.tools.json"
+    },
+    {
+      "from": "vitest.config.ts",
+      "to": "vitest.config.ts"
+    },
+    {
+      "from": "scripts/export-templates/boundary.yml",
+      "to": ".github/workflows/boundary.yml"
+    },
+    {
+      "from": "scripts/export-templates/checks.yml",
+      "to": "scripts/export-templates/checks.yml"
+    },
+    {
+      "from": "scripts/export-templates/checks.yml",
+      "to": ".github/workflows/ci.yml"
+    }
+  ]
+}

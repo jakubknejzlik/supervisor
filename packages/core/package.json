@@ -1,0 +1,15 @@
+{
+  "name": "@supervisor/core",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./schema": "./src/schema.ts",
+    "./canonical": "./src/canonical.ts",
+    "./identity": "./src/identity.ts",
+    "./i18n": "./src/i18n.ts"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}

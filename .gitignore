@@ -1,0 +1,27 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.pyc
+scratch/
+.tmp/
+node_modules/
+.dev.vars
+.dev.vars.*
+.sst/
+.wrangler/
+live/.local/
+live/dist/
+live/src/generated/
+
+# Root monorepo output and local-only state
+.local/
+dist/
+apps/worker/src/generated/
+playwright-report/
+test-results/
+*.tsbuildinfo
+deploy.config.json

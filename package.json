@@ -1,0 +1,38 @@
+{
+  "name": "supervisor",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "bun@1.4.3",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "infra"
+  ],
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "test": "bun run build:assets && vitest run",
+    "test:e2e": "bun run build:assets && node scripts/e2e-local.mjs && playwright test",
+    "typecheck": "bun run build:assets && tsc --noEmit && tsc -p tsconfig.tools.json && tsc -p tsconfig.dashboard.json && bun scripts/typecheck-infra.ts",
+    "build:assets": "bun scripts/build.ts --assets-only",
+    "build": "bun scripts/build.ts",
+    "bundle:check": "node scripts/check-bundle.mjs",
+    "clean:proof": "bun scripts/clean-export.ts --generic",
+    "boundary:check": "node scripts/scan-public-history.mjs --all-refs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261123.1",
+    "@playwright/test": "1.65.1",
+    "@pulumi/cloudflare": "6.24.0",
+    "@pulumi/pulumi": "3.277.0",
+    "@types/node": "24.10.1",
+    "esbuild": "0.27.4",
+    "miniflare": "5.20261119.0-beta",
+    "sst": "4.17.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0",
+    "wrangler": "4.166.0",
+    "@supervisor/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}

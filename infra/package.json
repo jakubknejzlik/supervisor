@@ -1,0 +1,1 @@
+{"name":"@supervisor/infra","private":true,"license":"Apache-2.0","type":"module","dependencies":{"@supervisor/core":"workspace:*","zod":"3.25.76"}}

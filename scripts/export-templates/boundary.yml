@@ -1,0 +1,103 @@
+name: Export boundary
+on:
+  workflow_run:
+    workflows: [Export checks]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Exact candidate commit SHA to scan with the protected policy
+        required: true
+permissions:
+  contents: read
+jobs:
+  trusted-boundary:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment: boundary-review
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      # Reviewed default-branch tools only; candidate files are data, never executed.
+      - name: Quiet checkout trusted tools
+        env:
+          SCAN_SHA: ${{ github.workflow_sha }}
+          CHECKOUT_PATH: trusted
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Suppress both streams, including Git errors: refs and subjects are untrusted.
+          # Keep the failure diagnostic constant and never enable shell tracing here.
+          if ! (
+            [[ "$SCAN_SHA" =~ ^[a-f0-9]{40}$ ]] &&
+            git init --quiet --template= "$CHECKOUT_PATH" &&
+            git -C "$CHECKOUT_PATH" remote add origin "$SOURCE_URL" &&
+            git -C "$CHECKOUT_PATH" -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')" fetch --quiet --no-progress --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' "$SCAN_SHA" &&
+            git -C "$CHECKOUT_PATH" checkout --quiet --detach --force "$SCAN_SHA" &&
+            git -C "$CHECKOUT_PATH" update-ref refs/heads/boundary-candidate "$SCAN_SHA"
+          ) >/dev/null 2>&1; then
+            echo 'Boundary checkout failed; values redacted' >&2
+            exit 1
+          fi
+      - name: Quiet checkout exact candidate
+        env:
+          SCAN_SHA: ${{ inputs.candidate || github.event.workflow_run.head_sha }}
+          CHECKOUT_PATH: candidate
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}.git
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Suppress both streams, including Git errors: refs and subjects are untrusted.
+          # Keep the failure diagnostic constant and never enable shell tracing here.
+          if ! (
+            [[ "$SCAN_SHA" =~ ^[a-f0-9]{40}$ ]] &&
+            git init --quiet --template= "$CHECKOUT_PATH" &&
+            git -C "$CHECKOUT_PATH" remote add origin "$SOURCE_URL" &&
+            git -C "$CHECKOUT_PATH" -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')" fetch --quiet --no-progress --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*' "$SCAN_SHA" &&
+            git -C "$CHECKOUT_PATH" checkout --quiet --detach --force "$SCAN_SHA" &&
+            git -C "$CHECKOUT_PATH" update-ref refs/heads/boundary-candidate "$SCAN_SHA"
+          ) >/dev/null 2>&1; then
+            echo 'Boundary checkout failed; values redacted' >&2
+            exit 1
+          fi
+      - name: Mark complete check pending on exact candidate
+        uses: actions/github-script@v7
+        env:
+          SCAN_SHA: ${{ inputs.candidate || github.event.workflow_run.head_sha }}
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({ ...context.repo, sha: process.env.SCAN_SHA, state: 'pending', context: 'public-boundary', description: 'Trusted all-ref scan in progress' });
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned scanner
+        run: |
+          curl --fail --location --silent --show-error https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  '"$RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Complete protected all-ref scan
+        env:
+          BOUNDARY_POLICY: ${{ secrets.BOUNDARY_POLICY }}
+        run: |
+          umask 077
+          printf '%s' "$BOUNDARY_POLICY" > "$RUNNER_TEMP/policy.json"
+          node trusted/scripts/scan-public-history.mjs --repo candidate --all-refs --policy "$RUNNER_TEMP/policy.json" --scratch "$RUNNER_TEMP/boundary" --report "$RUNNER_TEMP/complete.json"
+      - name: Record exact-candidate result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          SCAN_SHA: ${{ inputs.candidate || github.event.workflow_run.head_sha }}
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            if (!/^[a-f0-9]{40}$/.test(process.env.SCAN_SHA)) throw new Error('Invalid candidate');
+            await github.rest.repos.createCommitStatus({ ...context.repo, sha: process.env.SCAN_SHA, state: process.env.RESULT === 'success' ? 'success' : 'failure', context: 'public-boundary', description: 'Trusted complete boundary result', target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` });
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: complete-boundary-evidence
+          path: ${{ runner.temp }}/complete.json
+      - name: Remove protected input
+        if: always()
+        run: rm -f "$RUNNER_TEMP/policy.json"

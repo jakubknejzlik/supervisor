@@ -1,0 +1,14 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import ts from 'typescript';
+import { prepareSst } from './prepare-sst';
+prepareSst();
+const loaded = ts.readConfigFile('tsconfig.infra.json', ts.sys.readFile);
+const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, process.cwd());
+const program = ts.createProgram(parsed.fileNames, parsed.options);
+const diagnostics = [...(loaded.error ? [loaded.error] : []), ...parsed.errors, ...ts.getPreEmitDiagnostics(program)];
+const report = ts.formatDiagnosticsWithColorAndContext(diagnostics, { getCurrentDirectory: ts.sys.getCurrentDirectory, getCanonicalFileName: name => name, getNewLine: () => '\n' });
+mkdirSync('.local', { recursive: true });
+writeFileSync('.local/infra-diagnostics.txt', report);
+if (diagnostics.length) console.error(report);
+console.log(`Infrastructure strict typecheck: ${diagnostics.length} diagnostics in repository sources and checked upstream SDK sources; third-party declaration files (.d.ts) are not checked (skipLibCheck)`);
+if (diagnostics.length) process.exitCode = 1;

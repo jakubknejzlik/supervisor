@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta name="supervisor-data-url" content="/api/data.json">
+  <meta name="supervisor-ws-url" content="/api/ws">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="" data-i18n-content="private">
+  <title data-i18n="appTitle"></title>
+  <link id="supervisor-favicon" rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#records" data-i18n="skip"></a>
+  <main>
+    <header class="page-header">
+      <div class="language-control" role="group" aria-label="" data-i18n-aria-label="language"><button type="button" data-locale="en" data-i18n="enControl" data-i18n-aria-label="languageEn"></button><button type="button" data-locale="cs" data-i18n="csControl" data-i18n-aria-label="languageCs"></button></div>
+      <div class="brand"><span class="brand-icon" aria-hidden="true">S</span><span data-i18n="brand"></span><span class="private" data-i18n="private"></span></div>
+      <div class="heading"><div><p class="eyebrow" data-i18n="supervisor"></p><h1 data-i18n="heading"></h1><p class="intro" data-i18n="intro"></p></div><div class="publication"><span class="meta-label" data-i18n="published"></span><time id="published">—</time><span id="refresh-status" role="status" data-i18n="refreshIdle"></span></div></div>
+    </header>
+    <section class="stats" aria-label="" data-i18n-aria-label="summary">
+      <div><span class="stat-number" id="stat-all">—</span><span data-i18n="statAll"></span></div>
+      <div><span class="stat-number" id="stat-open">—</span><span data-i18n="statOpen"></span></div>
+      <div><span class="stat-number" id="stat-review">—</span><span data-i18n="statReview"></span></div>
+      <div><span class="stat-number" id="stat-done">—</span><span data-i18n="statDone"></span></div>
+    </section>
+    <section class="workspace" aria-label="" data-i18n-aria-label="workspace">
+      <div class="agent-tabs" role="group" aria-label="" data-i18n-aria-label="agentFilter">
+        <button type="button" data-agent="" aria-pressed="true" data-i18n="allAgents"><span></span></button>
+      </div>
+      <form class="filters" id="filters" role="search">
+        <label class="search-label"><span data-i18n="search"></span><input id="search" type="search" placeholder="" data-i18n-placeholder="searchPlaceholder" autocomplete="off"></label>
+        <label><span data-i18n="state"></span><select id="state"><option value="" data-i18n="allStates"></option></select></label>
+        <label><span data-i18n="sort"></span><select id="sort"><option value="checked-desc" data-i18n="sortNewest"></option><option value="checked-asc" data-i18n="sortOldest"></option><option value="name" data-i18n="sortName"></option></select></label>
+        <label class="checkbox-label"><input id="waiting-you" type="checkbox"><span data-i18n="waitingYou"></span></label>
+        <label class="checkbox-label"><input id="include-done" type="checkbox"><span data-i18n="includeDone"></span></label>
+      </form>
+      <div class="table-heading"><p id="result-count" role="status" aria-live="polite"></p><button type="button" class="text-button" id="reset" data-i18n="reset"></button></div>
+      <div class="table-wrap" id="records" tabindex="-1">
+        <table><caption class="sr-only" data-i18n="caption"></caption><thead><tr><th scope="col" data-i18n="taskAgent"></th><th scope="col" data-i18n="state"></th><th scope="col" data-i18n="checked"></th><th scope="col" data-i18n="links"></th><th scope="col"><span class="sr-only" data-i18n="copy"></span></th></tr></thead><tbody id="rows"></tbody></table>
+        <div id="empty" class="empty" hidden><h2 data-i18n="emptyTitle"></h2><p data-i18n="emptyHelp"></p></div>
+      </div>
+    </section>
+    <footer><p data-i18n="footerChecked"></p><p data-i18n="footerEvidence"></p><span id="revision"></span></footer>
+    <noscript><p class="empty" data-i18n="noscript"></p></noscript>
+  </main>
+  <p id="link-status" class="link-status" role="status" aria-live="polite"></p>
+  <dialog id="record-dialog" class="record-dialog" aria-labelledby="record-modal-title">
+    <div class="record-modal-shell">
+      <header class="record-modal-header">
+        <div class="record-modal-heading">
+          <h2 id="record-modal-title" data-i18n="detail"></h2>
+          <div class="record-modal-meta-line"><div id="record-modal-meta" class="record-modal-meta"></div><div id="record-modal-share"></div></div>
+        </div>
+        <div class="record-modal-buttons">
+          <div id="record-modal-actions"></div>
+          <button id="record-modal-close" class="icon-button" type="button" aria-label="" data-i18n-aria-label="closeDetail" title="" data-i18n-title="close" autofocus><span aria-hidden="true">×</span></button>
+        </div>
+      </header>
+      <div id="record-modal-content" class="record-modal-content"></div>
+      <p id="modal-link-status" class="link-status modal-link-status" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+</body>
+</html>
