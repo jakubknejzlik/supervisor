@@ -191,9 +191,14 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
 - the dashboard host redirects (302) to your Access team login;
 - `/api/ws` on the dashboard host also redirects to Access;
 - `POST /mcp` on the MCP host without a token returns 401 with a
-  `WWW-Authenticate` header that names `resource_metadata`;
-- `/.well-known/oauth-protected-resource` and
-  `/.well-known/oauth-authorization-server` on the MCP host return 200.
+  `WWW-Authenticate` header that contains a `resource_metadata="<url>"` value;
+- fetching that exact `<url>` from the header returns 200 and its `resource`
+  field equals `https://<mcp-host>/mcp`, including the `/mcp` path. Follow the
+  header value rather than guessing a well-known path: the RFC 9728 path
+  `/.well-known/oauth-protected-resource/mcp` returns the same resource, but
+  `/.well-known/oauth-protected-resource` without `/mcp` describes only the
+  host and is not the value a client should check;
+- `/.well-known/oauth-authorization-server` on the MCP host returns 200.
 
 ### Connect a client and verify
 
