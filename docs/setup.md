@@ -203,7 +203,12 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
 ### Connect a client and verify
 
 1. Add `https://<mcp-host>/mcp` as a connector in the MCP client named in
-   `mcpClients` and sign in with a configured principal.
+   `mcpClients` and sign in with a configured principal. If Access answers
+   `invalid_request` / `Redirect URI not allowed by application configuration`,
+   copy the exact `redirect_uri` parameter from the failed authorization URL,
+   add it unchanged (no wildcard) to that client's `callbackUris`, run
+   `sst diff` and `sst deploy` again, and retry the sign-in. A client that was
+   connected to an earlier installation may keep its previous callback.
 2. Open the dashboard host and sign in with the same identity.
 3. With the dashboard open, ask the client to create one record; it appears
    without a reload (WebSocket update).
