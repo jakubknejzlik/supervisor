@@ -23,7 +23,38 @@ export const SupervisorLive = Object.freeze({
     return (Array.isArray(records) ? records : []).filter(r => r && typeof r === 'object').map(r => ({ ...r, links: SupervisorLive.normalizeLinks(r.links) }));
   },
 });
-if (typeof document !== 'undefined') (async () => {
+// Theme policy stays independent of the DOM and resilient to blocked storage.
+export const SupervisorTheme = Object.freeze({
+  resolve(storage) {
+    try {
+      const value = storage().getItem('supervisor.theme');
+      if (['light', 'dark', 'system'].includes(value)) return value;
+    } catch { /* Storage can be unavailable. */ }
+    return 'system';
+  },
+  persist(storage, value) {
+    if (!['light', 'dark', 'system'].includes(value)) return;
+    try { storage().setItem('supervisor.theme', value); } catch { /* Keep the in-memory choice. */ }
+  },
+  effective(choice, dark) { return choice === 'system' ? (dark ? 'dark' : 'light') : choice; },
+});
+if (typeof document !== 'undefined') {
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  let theme = SupervisorTheme.resolve(() => window.localStorage);
+  const applyTheme = () => {
+    document.documentElement.dataset.theme = SupervisorTheme.effective(theme, media.matches);
+    document.querySelectorAll('[data-theme-choice]').forEach(node => node.setAttribute('aria-pressed', String(node.getAttribute('data-theme-choice') === theme)));
+  };
+  // The external bundle runs in the head before the stylesheet and first paint.
+  applyTheme();
+  media.addEventListener('change', () => { if (theme === 'system') applyTheme(); });
+  document.addEventListener('DOMContentLoaded', async () => {
+  document.querySelectorAll('[data-theme-choice]').forEach(node => node.addEventListener('click', () => {
+    theme = node.getAttribute('data-theme-choice');
+    SupervisorTheme.persist(() => window.localStorage, theme);
+    applyTheme();
+  }));
+  applyTheme();
   const serverLocale = document.querySelector('meta[name="supervisor-locale"]')?.getAttribute('content');
   let locale = resolveLocale(() => window.localStorage, serverLocale, navigator.languages);
   const t = (key, values = {}) => translate(locale, key, values);
@@ -457,7 +488,6 @@ if (typeof document !== 'undefined') (async () => {
     wsUrl.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const indicator = el('span', t('reconnecting'), 'connection-status');
     indicator.id = 'connection-status'; indicator.setAttribute('role', 'status');
-    indicator.style.cssText = 'font-size:.75rem;opacity:.65;margin-inline-start:.75rem';
     $('refresh-status').after(indicator);
     let socket, timer, heartbeat, attempt = 0, stopped = false, lastPong = 0;
     function status(value) { setStatus(indicator, value); }
@@ -493,4 +523,5 @@ if (typeof document !== 'undefined') (async () => {
     window.addEventListener('pageshow', event => { if (event.persisted) { stopped = false; connect(); } });
     connect();
   }
-})();
+  }, { once: true });
+}

@@ -9,15 +9,17 @@
   <meta name="description" content="" data-i18n-content="private">
   <title data-i18n="appTitle"></title>
   <link id="supervisor-favicon" rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <script src="./app.js"></script>
   <link rel="stylesheet" href="./style.css">
-  <script src="./app.js" defer></script>
 </head>
 <body>
   <a class="skip" href="#records" data-i18n="skip"></a>
   <main>
     <header class="page-header">
-      <div class="language-control" role="group" aria-label="" data-i18n-aria-label="language"><button type="button" data-locale="en" data-i18n="enControl" data-i18n-aria-label="languageEn"></button><button type="button" data-locale="cs" data-i18n="csControl" data-i18n-aria-label="languageCs"></button></div>
-      <div class="brand"><span class="brand-icon" aria-hidden="true">S</span><span data-i18n="brand"></span><span class="private" data-i18n="private"></span></div>
+      <div class="top-bar">
+        <div class="brand"><span class="brand-icon" aria-hidden="true">S</span><span class="brand-name" data-i18n="brand"></span><span class="private" data-i18n="private"></span></div>
+        <div class="preferences"><div class="language-control" role="group" aria-label="" data-i18n-aria-label="language"><button type="button" data-locale="en" data-i18n="enControl" data-i18n-aria-label="languageEn"></button><button type="button" data-locale="cs" data-i18n="csControl" data-i18n-aria-label="languageCs"></button></div><div class="theme-control" role="group" aria-label="" data-i18n-aria-label="theme"><button type="button" data-theme-choice="light" data-i18n="themeLight" data-i18n-aria-label="themeLight"></button><button type="button" data-theme-choice="dark" data-i18n="themeDark" data-i18n-aria-label="themeDark"></button><button type="button" data-theme-choice="system" data-i18n="themeSystem" data-i18n-aria-label="themeSystem"></button></div></div>
+      </div>
       <div class="heading"><div><p class="eyebrow" data-i18n="supervisor"></p><h1 data-i18n="heading"></h1><p class="intro" data-i18n="intro"></p></div><div class="publication"><span class="meta-label" data-i18n="published"></span><time id="published">—</time><span id="refresh-status" role="status" data-i18n="refreshIdle"></span></div></div>
     </header>
     <section class="stats" aria-label="" data-i18n-aria-label="summary">

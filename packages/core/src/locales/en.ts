@@ -1,4 +1,8 @@
 const en = {
+  "theme": "Color theme",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "themeSystem": "System",
   "appTitle": "Supervisor Dashboard",
   "brand": "SUPERVISOR DASHBOARD",
   "private": "Private dashboard",

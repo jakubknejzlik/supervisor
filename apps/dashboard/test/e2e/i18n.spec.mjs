@@ -139,3 +139,89 @@ test('static fallback negotiates navigator.languages and errors remain switchabl
     await expect(page.getByRole('searchbox', { name: 'Search dashboard' })).toBeVisible();
   } finally { await context.close(); }
 });
+
+async function keyboardChoose(page, selector, key = 'Enter') {
+  // Reach the control using the actual tab sequence, including focus visibility.
+  for (let i = 0; i < 20; i++) {
+    await page.keyboard.press('Tab');
+    if (await page.locator(selector).evaluate(node => node === document.activeElement)) {
+      expect(await page.locator(selector).evaluate(node => node.matches(':focus-visible'))).toBe(true);
+      await page.keyboard.press(key);
+      return;
+    }
+  }
+  throw new Error('Control was unreachable by keyboard');
+}
+
+test('keyboard theme and locale choices persist; System follows live changes at 360px', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: 'light', extraHTTPHeaders: { 'Cf-Access-Jwt-Assertion': token, 'Accept-Language': 'en' } });
+  try {
+    const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.goto(base);
+    const root = page.locator('html');
+    await expect(root).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('[data-theme-choice="system"]')).toHaveAttribute('aria-pressed', 'true');
+    await keyboardChoose(page, '[data-locale="cs"]', 'Space');
+    await expect(root).toHaveAttribute('lang', 'cs');
+    await expect(page.getByRole('group', { name: 'Barevný režim' })).toBeVisible();
+    await expect(page.locator('.theme-control button')).toHaveText(['Světlý', 'Tmavý', 'Systém']);
+    await keyboardChoose(page, '[data-theme-choice="dark"]');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await expect(page.locator('[data-theme-choice="dark"]')).toHaveAttribute('aria-pressed', 'true');
+    expect(await page.evaluate(() => localStorage.getItem('supervisor.theme'))).toBe('dark');
+    await page.reload();
+    await expect(root).toHaveAttribute('lang', 'cs');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    expect(await root.evaluate(node => getComputedStyle(node).colorScheme)).toBe('dark');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await keyboardChoose(page, '[data-theme-choice="system"]', 'Space');
+    await expect(root).toHaveAttribute('data-theme', 'light');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await page.reload();
+    await expect(page.locator('[data-theme-choice="system"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(root).toHaveAttribute('data-theme', 'dark');
+    await page.emulateMedia({ colorScheme: 'light' });
+    await expect(root).toHaveAttribute('data-theme', 'light');
+    for (const locale of ['cs', 'en']) {
+      await page.locator(`[data-locale="${locale}"]`).click();
+      for (const theme of ['light', 'dark', 'system']) {
+        await page.locator(`[data-theme-choice="${theme}"]`).click();
+        expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth)).toBe(true);
+        const bar = await page.locator('.top-bar').boundingBox();
+        for (const button of await page.locator('.preferences button').all()) {
+          const box = await button.boundingBox();
+          expect(box.x + box.width).toBeLessThanOrEqual(360);
+          expect(box.y).toBeGreaterThanOrEqual(bar.y);
+          expect(box.y + box.height).toBeLessThanOrEqual(bar.y + bar.height);
+        }
+      }
+    }
+    await expect(page.getByRole('group', { name: 'Color theme' })).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test('blocked theme storage stays usable in memory', async ({ browser }) => {
+  for (const mode of ['getter', 'write', 'corrupt']) {
+    const context = await browser.newContext({ colorScheme: 'light', extraHTTPHeaders: { 'Cf-Access-Jwt-Assertion': token } });
+    try {
+      await context.addInitScript(mode => {
+        if (mode === 'getter') Object.defineProperty(window, 'localStorage', { get() { throw new Error('Blocked'); } });
+        else if (mode === 'write') Storage.prototype.setItem = () => { throw new Error('Quota'); };
+        else localStorage.setItem('supervisor.theme', 'invalid');
+      }, mode);
+      const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
+      await page.goto(base);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await page.locator('[data-theme-choice="dark"]').click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.emulateMedia({ colorScheme: 'light' });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  }
+});

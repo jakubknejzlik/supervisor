@@ -1,5 +1,9 @@
 import en from "./en";
 const cs = {
+  "theme": "Barevný režim",
+  "themeLight": "Světlý",
+  "themeDark": "Tmavý",
+  "themeSystem": "Systém",
   "appTitle": "Přehled Supervisor",
   "brand": "PŘEHLED SUPERVISOR",
   "private": "Soukromý přehled",
