@@ -153,10 +153,16 @@ STAGE='stage-from-private-config'   # replace with config.stage
 bun install --frozen-lockfile
 bun run test
 bun run typecheck            # also prepares the checksum-verified local SST SDK
-bun run build
+bun run build                # generates the UI assets the Worker entrypoint imports
 bunx --no-install sst version
+bunx --no-install sst diff --stage "$STAGE"
 bunx --no-install sst deploy --stage "$STAGE"
 ```
+
+Always run `bun run build` in the same checkout before `sst diff` or
+`sst deploy`. A fresh clone has no generated assets, and SST then fails with
+`Could not resolve "./generated/assets"`. Review the `sst diff` plan before
+deploying: on a new installation it only creates resources.
 
 `sst version` must report 4.17.1 before deploying. Never omit `--stage`; a
 mismatching stage fails before state bootstrap. No automated deployment is included.
@@ -164,6 +170,41 @@ The UI assets must be generated before SST builds the production Worker entrypoi
 Keep app name, stage and account stable afterwards; changing them creates a
 separate installation. The graph does not adopt resources; resolve conflicting
 names/hosts before deployment instead of importing or replacing existing ownership.
+
+### Replacing an existing installation on the same hosts
+
+The graph never adopts resources, so a deployment onto hostnames that are already
+in use conflicts with the existing Worker custom domains and Access applications.
+When you deliberately replace your own earlier installation (this discards its
+data), first list what it owns on those exact hostnames and remove only that,
+in this order: the Worker custom domains, the self-hosted Access applications for
+those hostnames, reusable Access policies and service tokens used only by those
+applications, and finally the old Worker script together with its Durable Object
+namespace. Leave shared resources (zone, other hostnames and their Access
+applications, the SST state bucket) untouched. Then run the deploy sequence above.
+
+### After deploying
+
+The new custom domains can take about a minute before DNS and TLS answer; until
+then requests to them may fail to connect. Unauthenticated probes should then show:
+
+- the dashboard host redirects (302) to your Access team login;
+- `/api/ws` on the dashboard host also redirects to Access;
+- `POST /mcp` on the MCP host without a token returns 401 with a
+  `WWW-Authenticate` header that names `resource_metadata`;
+- `/.well-known/oauth-protected-resource` and
+  `/.well-known/oauth-authorization-server` on the MCP host return 200.
+
+### Connect a client and verify
+
+1. Add `https://<mcp-host>/mcp` as a connector in the MCP client named in
+   `mcpClients` and sign in with a configured principal.
+2. Open the dashboard host and sign in with the same identity.
+3. With the dashboard open, ask the client to create one record; it appears
+   without a reload (WebSocket update).
+4. Ask the client to list records; the new record is returned.
+
+<!-- TODO: exact OAuth screens and callback observed in the first real client run. -->
 
 ## Resource and state boundary
 
