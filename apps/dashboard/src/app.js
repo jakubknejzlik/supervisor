@@ -45,6 +45,8 @@ if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = SupervisorTheme.effective(theme, media.matches);
     const control = /** @type {HTMLSelectElement} */ (document.getElementById('theme'));
     if (control) control.value = theme;
+    const wrapper = document.querySelector('.theme-control');
+    if (wrapper instanceof HTMLElement) wrapper.dataset.themeChoice = theme;
   };
   // The external bundle runs in the head before the stylesheet and first paint.
   applyTheme();

@@ -190,7 +190,7 @@ test('row and modal copy canonical links; fresh page opens exact record even wit
     await fresh.getByRole('button', { name: 'Zavřít detail' }).click();
     expect(new URL(fresh.url()).searchParams.get('q')).toBe('does-not-match');
     expect(new URL(fresh.url()).searchParams.has('record')).toBe(false);
-  }, { permissions: ['clipboard-read', 'clipboard-write'] });
+  }, { permissions: browser.browserType().name() === 'webkit' ? ['clipboard-read'] : ['clipboard-read', 'clipboard-write'] });
 });
 
 test('modal fits viewport, scrolls under reachable close button, traps and returns focus', async ({ browser }) => {

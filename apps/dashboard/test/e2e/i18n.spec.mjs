@@ -140,25 +140,76 @@ test('static fallback negotiates navigator.languages and errors remain switchabl
   } finally { await context.close(); }
 });
 
+async function expectThemeIcon(page, choice) {
+  await expect(page.locator('.theme-control')).toHaveAttribute('data-theme-choice', choice);
+  for (const value of ['light', 'dark', 'system']) {
+    const icon = page.locator(`[data-theme-icon="${value}"]`);
+    if (value === choice) await expect(icon).toBeVisible();
+    else await expect(icon).toBeHidden();
+  }
+}
+
 async function keyboardFocus(page, selector) {
   // Reach each native select through the actual tab sequence.
   for (let i = 0; i < 20; i++) {
     await page.keyboard.press('Tab');
     if (await page.locator(selector).evaluate(node => node === document.activeElement)) {
       expect(await page.locator(selector).evaluate(node => node.matches(':focus-visible'))).toBe(true);
-      const ring = await page.locator(selector).evaluate(node => {
-        const style = getComputedStyle(node);
-        return { width: parseFloat(style.outlineWidth), style: style.outlineStyle, color: style.outlineColor, offset: parseFloat(style.outlineOffset) };
-      });
-      expect(ring.width).toBeGreaterThanOrEqual(3);
-      expect(ring.style).toBe('solid');
-      expect(ring.color).not.toBe('rgba(0, 0, 0, 0)');
-      expect(ring.offset).toBeGreaterThanOrEqual(3);
       return;
     }
   }
   throw new Error('Control was unreachable by keyboard');
 }
+
+async function expectFocusRing(page, selector) {
+  const ring = await page.locator(selector).evaluate(node => {
+    const target = node.id === 'theme' ? node.closest('.theme-control') : node;
+    const style = getComputedStyle(target);
+    const rendered = target.getBoundingClientRect().width > 0 && target.getBoundingClientRect().height > 0;
+    return { rendered, width: parseFloat(style.outlineWidth), style: style.outlineStyle, color: style.outlineColor, offset: parseFloat(style.outlineOffset) };
+  });
+  expect(ring.rendered).toBe(true);
+  expect(ring.width).toBe(3);
+  expect(ring.style).toBe('solid');
+  expect(ring.color).not.toBe('rgba(0, 0, 0, 0)');
+  expect(ring.offset).toBeGreaterThanOrEqual(3);
+}
+
+for (const locale of ['en', 'cs']) test(`${locale}: native keyboard typeahead changes choice, applied theme and icon`, async ({ browser }) => {
+  const context = await contextFor(browser);
+  try {
+    const page = await context.newPage();
+    await page.goto(base);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.locator('#locale').selectOption(locale);
+    const choices = locale === 'en' ? [['d', 'dark', 'dark'], ['l', 'light', 'light']] : [['t', 'dark', 'dark'], ['sv', 'light', 'light']];
+    for (const [key, choice, applied] of choices) {
+      // A fresh control clears WebKit's native prefix buffer between choices.
+      await page.reload();
+      await keyboardFocus(page, '#theme');
+      for (const letter of key) await page.keyboard.press(letter);
+      await page.keyboard.press('Tab');
+      await expect(page.locator('#theme')).toHaveValue(choice);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', applied);
+      await expectThemeIcon(page, choice);
+    }
+  } finally { await context.close(); }
+});
+
+test('native selects render separate 3px keyboard focus rings in both themes', async ({ browser }) => {
+  const context = await contextFor(browser);
+  try {
+    const page = await context.newPage();
+    await page.goto(base);
+    for (const choice of ['light', 'dark']) {
+      await page.locator('#theme').selectOption(choice);
+      for (const selector of ['#locale', '#theme']) {
+        await keyboardFocus(page, selector);
+        await expectFocusRing(page, selector);
+      }
+    }
+  } finally { await context.close(); }
+});
 
 test('keyboard select choices persist; System follows live changes at 360px', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: 'light', extraHTTPHeaders: { 'Cf-Access-Jwt-Assertion': token, 'Accept-Language': 'en' } });
@@ -171,6 +222,7 @@ test('keyboard select choices persist; System follows live changes at 360px', as
     await expect(root).toHaveAttribute('data-theme', 'light');
     await expect(language).toHaveValue('en');
     await expect(theme).toHaveValue('system');
+    await expectThemeIcon(page, 'system');
     await keyboardFocus(page, '#locale');
     // Native select behavior varies by OS; selectOption after keyboard focus is portable.
     await language.selectOption('cs');
@@ -181,7 +233,10 @@ test('keyboard select choices persist; System follows live changes at 360px', as
     await expect(language.locator('option')).toHaveText(['EN', 'CZ']);
     await expect(theme.locator('option')).toHaveText(['Světlý', 'Tmavý', 'Systém']);
     await keyboardFocus(page, '#theme');
-    await theme.selectOption('dark');
+    // Native type-ahead selects the localized Dark option on desktop and mobile.
+    await page.keyboard.press('t');
+    await page.keyboard.press('Tab');
+    await expectThemeIcon(page, 'dark');
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await expect(theme).toHaveValue('dark');
     expect(await page.evaluate(() => localStorage.getItem('supervisor.theme'))).toBe('dark');
@@ -190,6 +245,7 @@ test('keyboard select choices persist; System follows live changes at 360px', as
     await expect(language).toHaveValue('cs');
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await expect(theme).toHaveValue('dark');
+    await expectThemeIcon(page, 'dark');
     expect(await theme.evaluate(node => getComputedStyle(node).colorScheme)).toBe('dark');
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.emulateMedia({ colorScheme: 'light' });
@@ -197,12 +253,15 @@ test('keyboard select choices persist; System follows live changes at 360px', as
     await keyboardFocus(page, '#theme');
     await theme.selectOption('system');
     await expect(theme).toHaveValue('system');
+    await expectThemeIcon(page, 'system');
     await expect(root).toHaveAttribute('data-theme', 'light');
     await page.emulateMedia({ colorScheme: 'dark' });
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await expect(theme).toHaveValue('system');
+    await expectThemeIcon(page, 'system');
     await page.reload();
     await expect(theme).toHaveValue('system');
+    await expectThemeIcon(page, 'system');
     await expect(root).toHaveAttribute('data-theme', 'dark');
     await page.emulateMedia({ colorScheme: 'light' });
     await expect(root).toHaveAttribute('data-theme', 'light');
@@ -212,6 +271,10 @@ test('keyboard select choices persist; System follows live changes at 360px', as
       for (const choice of ['light', 'dark', 'system']) {
         await theme.selectOption(choice);
         await expect(theme).toHaveValue(choice);
+        await expectThemeIcon(page, choice);
+        await page.reload();
+        await expect(theme).toHaveValue(choice);
+        await expectThemeIcon(page, choice);
         expect(await page.evaluate(() => document.scrollingElement.scrollWidth <= innerWidth)).toBe(true);
         const bar = await page.locator('.top-bar').boundingBox();
         const boxes = await page.locator('.brand, .preferences select').evaluateAll(nodes => nodes.map(node => {
@@ -231,11 +294,6 @@ test('keyboard select choices persist; System follows live changes at 360px', as
     await expect(theme).toHaveAccessibleName('Color theme');
     await expect(language).toHaveAccessibleName('Interface language');
     await expect(theme.locator('option')).toHaveText(['Light', 'Dark', 'System']);
-    // Check a rendered 3px keyboard ring on both selects in each effective theme.
-    for (const choice of ['light', 'dark']) {
-      await theme.selectOption(choice);
-      for (const selector of ['#locale', '#theme']) await keyboardFocus(page, selector);
-    }
     expect(errors).toEqual([]);
   } finally { await context.close(); }
 });
@@ -252,13 +310,130 @@ test('blocked theme storage stays usable in memory', async ({ browser }) => {
       const page = await context.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.goto(base);
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expectThemeIcon(page, 'system');
       await page.locator('#theme').selectOption('dark');
+      await expectThemeIcon(page, 'dark');
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
       await page.emulateMedia({ colorScheme: 'dark' });
       await page.emulateMedia({ colorScheme: 'light' });
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
       await expect(page.locator('#theme')).toHaveValue('dark');
+      await page.reload();
+      await expect(page.locator('#theme')).toHaveValue('system');
+      await expectThemeIcon(page, 'system');
       expect(errors).toEqual([]);
     } finally { await context.close(); }
   }
+});
+
+
+for (const width of [320, 360, 1280]) test(`native theme target and header geometry at ${width}px`, async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width, height: 800 }, extraHTTPHeaders: { 'Cf-Access-Jwt-Assertion': token } });
+  try {
+    const page = await context.newPage();
+    await page.goto(base);
+    await expect(page.locator('.theme-visual')).toHaveAttribute('aria-hidden', 'true');
+    for (const locale of ['en', 'cs']) {
+      await page.locator('#locale').selectOption(locale);
+      const measurement = await page.evaluate(() => {
+        const box = selector => {
+          const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
+          return { x, y, width, height };
+        };
+        const theme = box('.theme-control');
+        return {
+          locale: box('#locale'), theme, brand: box('.brand'), row: box('.top-bar'),
+          pair: box('.preferences'), gap: theme.x - box('#locale').x - box('#locale').width,
+          localeScrollWidth: document.querySelector('#locale').scrollWidth, localeClientWidth: document.querySelector('#locale').clientWidth,
+          scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth,
+          centerTarget: document.elementFromPoint(theme.x + theme.width / 2, theme.y + theme.height / 2)?.id,
+          cornerTarget: document.elementFromPoint(theme.x + 3, theme.y + 3)?.id,
+          visualPointerEvents: getComputedStyle(document.querySelector('.theme-visual')).pointerEvents,
+          selectHeight: document.querySelector('#theme').getBoundingClientRect().height,
+        };
+      });
+      console.log('HEADER_WIDTHS ' + JSON.stringify({ viewport: width, language: locale, ...measurement }));
+      if (width <= 480) expect(measurement.pair.width).toBeLessThanOrEqual(100);
+      expect(measurement.localeScrollWidth).toBeLessThanOrEqual(measurement.localeClientWidth);
+      expect(measurement.locale.height).toBeGreaterThanOrEqual(44);
+      expect(measurement.theme.height).toBeGreaterThanOrEqual(44);
+      expect(measurement.selectHeight).toBeGreaterThanOrEqual(44);
+      expect(measurement.centerTarget).toBe('theme');
+      expect(measurement.cornerTarget).toBe('theme');
+      expect(measurement.visualPointerEvents).toBe('none');
+      expect(measurement.scrollWidth).toBe(measurement.clientWidth);
+      const boxes = [measurement.brand, measurement.locale, measurement.theme];
+      for (const box of boxes) {
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        expect(box.y).toBeGreaterThanOrEqual(measurement.row.y);
+        expect(box.y + box.height).toBeLessThanOrEqual(measurement.row.y + measurement.row.height);
+      }
+      expect(boxes[0].x + boxes[0].width).toBeLessThanOrEqual(boxes[1].x);
+      expect(boxes[1].x + boxes[1].width).toBeLessThanOrEqual(boxes[2].x);
+    }
+  } finally { await context.close(); }
+});
+
+test('locale chevron preserves native hit testing, text space and keyboard input', async ({ browser }) => {
+  const context = await contextFor(browser);
+  try {
+    const page = await context.newPage();
+    await page.goto(base);
+    for (const width of [320, 360, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      for (const choice of ['en', 'cs']) {
+        const locale = page.locator('#locale');
+        await locale.selectOption(choice);
+        const geometry = await page.evaluate(() => {
+          const select = document.querySelector('#locale'), style = getComputedStyle(select), rect = select.getBoundingClientRect();
+          const probe = document.createElement('span');
+          probe.className = 'sr-only'; probe.style.font = style.font; probe.textContent = select.selectedOptions[0].text;
+          document.body.append(probe);
+          const range = document.createRange(); range.selectNodeContents(probe);
+          const textWidth = range.getBoundingClientRect().width; probe.remove();
+          const textLeft = rect.x + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+          const chevron = selector => {
+            const node = document.querySelector(selector), css = getComputedStyle(node), box = node.getBoundingClientRect();
+            const control = node.closest('.locale-control, .theme-control').getBoundingClientRect();
+            return { x: box.x, y: box.y, width: box.width, height: box.height, cssWidth: css.width, cssHeight: css.height, color: css.stroke, path: node.querySelector('path').getAttribute('d'), right: control.right - box.right, center: box.y + box.height / 2, controlCenter: control.y + control.height / 2 };
+          };
+          const language = chevron('.locale-chevron'), theme = chevron('.theme-chevron');
+          return { language, theme, textLeft, textWidth, textRight: textLeft + textWidth, availableTextWidth: select.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), target: document.elementFromPoint(language.x + language.width / 2, language.y + language.height / 2)?.id, appearance: style.appearance, pointerEvents: getComputedStyle(document.querySelector('.locale-chevron')).pointerEvents };
+        });
+        expect(geometry.target).toBe('locale');
+        expect(geometry.appearance).toBe('none');
+        expect(geometry.pointerEvents).toBe('none');
+        await expect(page.locator('.locale-chevron')).toHaveAttribute('aria-hidden', 'true');
+        expect(geometry.textWidth).toBeLessThanOrEqual(geometry.availableTextWidth);
+        expect(geometry.textRight).toBeLessThanOrEqual(geometry.language.x);
+        for (const property of ['width', 'height', 'cssWidth', 'cssHeight', 'color', 'path', 'right']) expect(geometry.language[property]).toBe(geometry.theme[property]);
+        expect(geometry.language.center).toBe(geometry.language.controlCenter);
+        await page.evaluate(() => {
+          window.__localeClicks = [];
+          document.querySelector('#locale').addEventListener('pointerdown', event => window.__localeClicks.push({ target: event.target.id, trusted: event.isTrusted }), { once: true });
+        });
+        await page.mouse.click(geometry.language.x + geometry.language.width / 2, geometry.language.y + geometry.language.height / 2);
+        if (await locale.evaluate(() => CSS.supports('selector(:open)'))) {
+          await expect.poll(() => locale.evaluate(node => node.matches(':open'))).toBe(true);
+        }
+        const open = await locale.evaluate(node => ({ supported: CSS.supports('selector(:open)'), open: CSS.supports('selector(:open)') ? node.matches(':open') : null, focused: node === document.activeElement }));
+        if (open.supported) expect(open.open).toBe(true);
+        expect(open.focused).toBe(true);
+        await locale.selectOption(choice === 'en' ? 'cs' : 'en');
+        await page.keyboard.press('Escape');
+        await expect(locale).toHaveValue(choice === 'en' ? 'cs' : 'en');
+        expect(await page.evaluate(() => window.__localeClicks)).toEqual([{ target: 'locale', trusted: true }]);
+        console.log('LOCALE_CLICK ' + JSON.stringify({ engine: browser.browserType().name(), width, choice, ...open }));
+        await page.reload();
+        await page.locator('.skip').focus();
+        await keyboardFocus(page, '#locale');
+        await expectFocusRing(page, '#locale');
+        await page.keyboard.press(choice === 'en' ? 'e' : 'c');
+        await page.keyboard.press('Tab');
+        await expect(locale).toHaveValue(choice);
+        await expect(page.locator('html')).toHaveAttribute('lang', choice);
+      }
+    }
+  } finally { await context.close(); }
 });

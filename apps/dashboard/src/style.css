@@ -165,3 +165,25 @@ select{appearance:auto;background-image:none;padding-right:8px}
 }
 
 .connection-status{font-size:.75rem;margin-inline-start:.75rem;color:var(--muted)}
+
+/* The native select covers the visual control and owns all input behavior. */
+.theme-control{position:relative;flex-shrink:0;width:60px;height:44px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink)}
+.locale-control{position:relative;display:flex;flex-shrink:0;height:44px;color:var(--ink)}
+.preferences #locale{appearance:none;padding-right:28px}
+.theme-visual{display:flex;align-items:center;height:100%;padding-left:10px;pointer-events:none}
+.theme-visual svg{width:22px;height:22px;flex-shrink:0}
+.theme-visual [data-theme-icon]{display:none}
+.theme-control[data-theme-choice="light"] [data-theme-icon="light"],.theme-control[data-theme-choice="dark"] [data-theme-icon="dark"],.theme-control[data-theme-choice="system"] [data-theme-icon="system"]{display:block}
+.locale-control .control-chevron,.theme-visual .control-chevron{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:12px;height:12px;pointer-events:none}
+/* Compensate for the theme wrapper's border to match the visible inset. */
+.theme-visual .control-chevron{margin-right:-1px}
+.preferences #theme{position:absolute;inset:-1px;width:calc(100% + 2px);height:calc(100% + 2px);appearance:none;background:transparent;color:transparent;border:0;padding:0;outline:none}
+#theme option{color:var(--ink);background:var(--surface)}
+.theme-control:has(#theme:focus-visible){outline:3px solid var(--focus);outline-offset:3px}
+@media(max-width:480px){
+.preferences #locale{width:48px;padding-left:6px;padding-right:20px}
+.theme-control{width:44px}
+.theme-visual{padding-left:7px}
+.theme-visual svg{width:18px;height:18px}
+.locale-control .control-chevron,.theme-visual .control-chevron{width:10px;height:10px;right:7px}
+}
