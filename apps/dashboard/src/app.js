@@ -43,20 +43,25 @@ if (typeof document !== 'undefined') {
   let theme = SupervisorTheme.resolve(() => window.localStorage);
   const applyTheme = () => {
     document.documentElement.dataset.theme = SupervisorTheme.effective(theme, media.matches);
-    document.querySelectorAll('[data-theme-choice]').forEach(node => node.setAttribute('aria-pressed', String(node.getAttribute('data-theme-choice') === theme)));
+    const control = /** @type {HTMLSelectElement} */ (document.getElementById('theme'));
+    if (control) control.value = theme;
   };
   // The external bundle runs in the head before the stylesheet and first paint.
   applyTheme();
   media.addEventListener('change', () => { if (theme === 'system') applyTheme(); });
   document.addEventListener('DOMContentLoaded', async () => {
-  document.querySelectorAll('[data-theme-choice]').forEach(node => node.addEventListener('click', () => {
-    theme = node.getAttribute('data-theme-choice');
+  const themeControl = /** @type {HTMLSelectElement} */ (document.getElementById('theme'));
+  themeControl.addEventListener('change', () => {
+    const value = themeControl.value;
+    if (!['light', 'dark', 'system'].includes(value)) return;
+    theme = value;
     SupervisorTheme.persist(() => window.localStorage, theme);
     applyTheme();
-  }));
+  });
   applyTheme();
   const serverLocale = document.querySelector('meta[name="supervisor-locale"]')?.getAttribute('content');
   let locale = resolveLocale(() => window.localStorage, serverLocale, navigator.languages);
+  const localeControl = /** @type {HTMLSelectElement} */ (document.getElementById('locale'));
   const t = (key, values = {}) => translate(locale, key, values);
   function applyShell() {
     document.documentElement.lang = locale;
@@ -64,14 +69,14 @@ if (typeof document !== 'undefined') {
     for (const attribute of ['content', 'placeholder', 'aria-label', 'title']) {
       document.querySelectorAll('[data-i18n-' + attribute + ']').forEach(node => node.setAttribute(attribute, t(node.getAttribute('data-i18n-' + attribute))));
     }
-    document.querySelectorAll('[data-locale]').forEach(node => node.setAttribute('aria-pressed', String(node.getAttribute('data-locale') === locale)));
+    localeControl.value = locale;
   }
   let localeChanged = () => {};
-  document.querySelectorAll('[data-locale]').forEach(node => node.addEventListener('click', () => {
-    const value = node.getAttribute('data-locale');
+  localeControl.addEventListener('change', () => {
+    const value = localeControl.value;
     if (value !== 'en' && value !== 'cs') return;
     locale = value; persistLocale(() => window.localStorage, locale); applyShell(); localeChanged();
-  }));
+  });
   applyShell();
   const configuredDataUrl = (/** @type {HTMLMetaElement} */ (document.querySelector('meta[name="supervisor-data-url"]')))?.content;
   const dataUrl = configuredDataUrl || './data.json';
