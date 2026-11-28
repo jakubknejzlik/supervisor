@@ -65,7 +65,8 @@ Managed OAuth assessment. Hostnames and audience values are placeholders.
 | Probe or readback | Observed result |
 | --- | --- |
 | `/`, `/api/state`, `/api/ws`; `/api/ws` also with WebSocket upgrade headers | 302 to Access login. The login URL's `kid` is the dashboard application's AUD. Response header: `WWW-Authenticate: Cloudflare-Access resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/<path>"`, scoped to the requested path. |
-| Exact `/mcp` and `/mcp/x` | 401 from the MCP Access application, with `WWW-Authenticate: Bearer realm="OAuth", error="invalid_token", ... resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/mcp"`. No redirect to browser login. |
+| Exact `/mcp` | 401 from the MCP Access application, with `WWW-Authenticate: Bearer realm="OAuth", error="invalid_token", ... resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/mcp"`. No redirect to browser login. |
+| `/mcp/x` (any subpath) | 401 from the same MCP Access application, no redirect. The `resource_metadata` suffix follows the requested path (`.../cloudflare-access-protected-resource/mcp/x`); MCP clients must use the challenge from exact `/mcp`. |
 | Root metadata: `/.well-known/oauth-protected-resource` and `/.well-known/cloudflare-access-protected-resource` (no suffix) | 200 from Access. `resource` is the host root `https://<host>`, not the MCP endpoint. Do not use these documents for the MCP client. |
 | Scoped metadata: `/.well-known/oauth-protected-resource/mcp` and `/.well-known/cloudflare-access-protected-resource/mcp` | 200 from Access. `resource` is exactly `https://<host>/mcp`; `authorization_servers` is an array containing only the configured Access team domain. The 401 challenge on `/mcp` advertises the `cloudflare-access-protected-resource/mcp` document. |
 | `/.well-known/oauth-authorization-server` | 200 from Access. |
