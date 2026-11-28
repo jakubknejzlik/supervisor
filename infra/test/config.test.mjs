@@ -18,7 +18,75 @@ it('accepts exact ChatGPT callbacks and an explicitly enabled fixed local listen
   const input = example();
   input.allowLocalProbe = true;
   input.mcpClients.push({ client: 'chatgpt', callbackUris: ['https://chatgpt.com/connector/oauth/sample-callback', 'https://chatgpt.com/connector_platform_oauth_redirect'] }, { client: 'local-probe', callbackUris: ['http://127.0.0.1:8788/callback'] });
-  expect(parse(input).mcpClients).toEqual(input.mcpClients);
+  expect(parse(input).mcpClients).toEqual(input.mcpClients.map(client => client.client === 'chatgpt' ? { ...client, connectorCallbackPattern: false } : client));
+});
+it.each([undefined, false, true])('accepts the ChatGPT connector callback flag %s with default false', flag => {
+  const input = example();
+  input.mcpClients.push({ client: 'chatgpt', callbackUris: ['https://chatgpt.com/connector_platform_oauth_redirect'], ...(flag === undefined ? {} : { connectorCallbackPattern: flag }) });
+  expect(parse(input).mcpClients.at(-1).connectorCallbackPattern).toBe(flag ?? false);
+});
+it.each(['claude', 'local-probe'])('rejects the connector callback flag on %s even when false', client => {
+  for (const connectorCallbackPattern of [false, true]) {
+    const input = example();
+    input.allowLocalProbe = true;
+    input.mcpClients = [{ client, callbackUris: [client === 'claude' ? 'https://claude.ai/api/mcp/auth_callback' : 'http://127.0.0.1:8788/callback'], connectorCallbackPattern }];
+    expect(() => parse(input)).toThrow('Values redacted');
+  }
+});
+it.each(['true', 1, null])('rejects a non-boolean ChatGPT connector callback flag %s', connectorCallbackPattern => {
+  const input = example();
+  input.mcpClients = [{ client: 'chatgpt', callbackUris: ['https://chatgpt.com/connector_platform_oauth_redirect'], connectorCallbackPattern }];
+  expect(() => parse(input)).toThrow('Values redacted');
+});
+it.each(['omitted', 'empty'])('accepts %s callbackUris with ChatGPT pattern opt-in', form => {
+  const input = example();
+  input.mcpClients = [{ client: 'chatgpt', connectorCallbackPattern: true, ...(form === 'empty' ? { callbackUris: [] } : {}) }];
+  expect(parse(input).mcpClients).toEqual([{ client: 'chatgpt', connectorCallbackPattern: true, callbackUris: [] }]);
+});
+it.each(['chatgpt', 'claude', 'local-probe'])('rejects omitted and empty callbackUris for %s without pattern opt-in', client => {
+  for (const callbacks of [{}, { callbackUris: [] }]) for (const flag of [undefined, false]) {
+    const input = example();
+    input.allowLocalProbe = true;
+    input.mcpClients = [{ client, ...callbacks, ...(flag === undefined ? {} : { connectorCallbackPattern: flag }) }];
+    expect(() => parse(input)).toThrow('Values redacted');
+  }
+});
+it.each(['claude', 'local-probe'])('rejects omitted and empty callbackUris for %s even with the pattern flag', client => {
+  for (const callbacks of [{}, { callbackUris: [] }]) {
+    const input = example();
+    input.allowLocalProbe = true;
+    input.mcpClients = [{ client, ...callbacks, connectorCallbackPattern: true }];
+    expect(() => parse(input)).toThrow('Values redacted');
+  }
+});
+it.each(['omitted', 'empty'])('rejects legacy host with %s exact callback list and redacts values', form => {
+  const input = single();
+  input.legacyMcpHostname = 'private-legacy.example.invalid';
+  input.mcpClients = [{ client: 'chatgpt', connectorCallbackPattern: true, ...(form === 'empty' ? { callbackUris: [] } : {}) }];
+  expect(() => parse(input)).toThrow('Invalid deployment config, account selection or stage; see docs/setup.md. Values redacted.');
+});
+it('accepts legacy host with an empty ChatGPT list when another client supplies exact callbacks', () => {
+  const input = single();
+  input.legacyMcpHostname = 'mcp.example.invalid';
+  input.mcpClients.push({ client: 'chatgpt', connectorCallbackPattern: true });
+  expect(parse(input).mcpClients.at(-1).callbackUris).toEqual([]);
+});
+it('accepts the documented clean ChatGPT config example', () => {
+  const entry = readFileSync('docs/setup.md', 'utf8').match(/```json\n(\{\n  "client": "chatgpt",[\s\S]*?)\n```/)[1];
+  const input = single();
+  input.mcpClients = [JSON.parse(entry)];
+  expect(parse(input).mcpClients).toEqual([{ client: 'chatgpt', connectorCallbackPattern: true, callbackUris: [] }]);
+});
+it.each([
+  'https://chatgpt.com/connector/oauth/*',
+  'https://chatgpt.com/connector/oauth/%2A',
+  'https://chatgpt.com/*',
+  'https://chatgpt.com/connector/*',
+  'https://*.chatgpt.com/connector/oauth/x',
+])('rejects wildcard callbackUris even with the ChatGPT pattern opt-in: %s', uri => {
+  const input = example();
+  input.mcpClients = [{ client: 'chatgpt', callbackUris: [uri], connectorCallbackPattern: true }];
+  expect(() => parse(input)).toThrow('Values redacted');
 });
 it('accepts configured restrictive conditions and explicit new-team IdPs', () => {
   const input = example();

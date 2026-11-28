@@ -2,12 +2,16 @@ import * as cf from '@pulumi/cloudflare';
 import { all, output, secret } from '@pulumi/pulumi';
 import { loadDeploymentConfig, type DeploymentConfig } from './config';
 
+const chatgptConnectorCallbackPattern = 'https://chatgpt.com/connector/oauth/*';
+
 // Only constructors for new resources. No resource lookup, adoption or data seed.
 export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
   const single = 'hostname' in config;
   const dashboardHost = single ? config.hostname : config.dashboardHostname;
   const mcpHost = single ? config.hostname : config.mcpHostname;
   const legacyHost = single ? config.legacyMcpHostname : undefined;
+  const exactCallbackUris = config.mcpClients.flatMap(client => client.callbackUris);
+  const connectorCallbackPattern = config.mcpClients.some(client => client.client === 'chatgpt' && client.connectorCallbackPattern);
   // Preserve all existing host-wide resource arguments and logical names during
   // migration. Only the new path app/policy are added to the existing graph.
   const specs = [
@@ -35,7 +39,8 @@ export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
       oauthConfiguration: oauth ? {
         enabled: true,
         dynamicClientRegistration: {
-          enabled: true, allowedUris: config.mcpClients.flatMap(client => client.callbackUris),
+          enabled: true, allowedUris: connectorCallbackPattern && host === mcpHost
+            ? [...exactCallbackUris, chatgptConnectorCallbackPattern] : exactCallbackUris,
           allowAnyOnLocalhost: false, allowAnyOnLoopback: false,
         },
         grant: { sessionDuration: config.oauthSessionDuration, accessTokenLifetime: config.oauthAccessTokenLifetime },

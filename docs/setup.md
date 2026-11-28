@@ -135,7 +135,7 @@ keys. Account selection is mandatory, so SST does not discover accounts.
 | `sessionDuration` | Dashboard/MCP Access session, default `24h`, maximum 744h. |
 | `oauthSessionDuration` | MCP OAuth grant session, default `336h`, maximum 744h. |
 | `oauthAccessTokenLifetime` | Default `15m`, maximum 24h and no longer than the grant session. All durations use positive integer `m` or `h` units. |
-| `mcpClients` | Required nonempty unique list of enabled `{client, callbackUris}` entries; rules below. Disabled clients are omitted. |
+| `mcpClients` | Required nonempty unique list of enabled client entries; `callbackUris` may be omitted only for ChatGPT with `connectorCallbackPattern: true`; rules below. Disabled clients are omitted. |
 | `allowLocalProbe` | Default false. Explicitly opt in to the exact local-probe exception only while using a matching listener. Never enables broad localhost/loopback permission. |
 | `storeKey` | Optional fixed value `supervisor-store-v1`; any other value is rejected. Matches the unchanged runtime singleton within each new namespace. |
 | `displayTimezone` | Optional Intl timezone, default `UTC`. |
@@ -212,7 +212,16 @@ probes should show:
 
 ### Connect a client and verify
 
-1. In ChatGPT, add `https://<host>/mcp` as the connector URL in single mode
+1. For a new ChatGPT connector, first set `connectorCallbackPattern: true` on
+   the `chatgpt` entry in your private deployment config; no exact callback is
+   required for a clean setup (see the
+   [example below](#exact-mcp-callbacks)) and deploy through your normal reviewed
+   process. Cloudflare Managed OAuth does not advertise RFC 9207
+   `authorization_response_iss_parameter_supported`, so new ChatGPT connectors
+   use a per-connector callback ID that is unknown until creation. The opt-in
+   permits registration for any ChatGPT connector callback ID on the primary
+   `/mcp` Access app only; it never changes the legacy host's allowlist.
+   In ChatGPT, add `https://<host>/mcp` as the connector URL in single mode
    (`https://<mcp-host>/mcp` in split mode). For another MCP client, use the same
    derived URL. The client must be named in
    `mcpClients` (or reconnect an existing connector). The client opens your
@@ -224,7 +233,9 @@ probes should show:
    copy the exact `redirect_uri` parameter from the failed authorization URL,
    add it unchanged (no wildcard) to that client's `callbackUris`, run
    `sst diff` and `sst deploy` again, and retry the sign-in. A client that was
-   connected to an earlier installation may keep its previous callback.
+   connected to an earlier installation may keep its previous callback. For
+   fresh ChatGPT DCR rejected before an authorization URL is available, enable
+   the opt-in above rather than trying to discover the callback ID in advance.
 2. Write one record: ask the client to call `upsert_record` with a new `id`
    and `expectedRev: 0`. The response returns the record at rev 1. Repeating
    the same create returns `rev_conflict` and changes nothing.
@@ -344,26 +355,61 @@ These checks and exact permission sufficiency remain separate-account work.
 
 ## Exact MCP callbacks
 
-Each enabled entry supplies its exact observed callback URI; nothing is guessed
-or auto-discovered. The API exposes one DCR allowlist, so the graph flattens the
-validated per-client lists into that exact union. This constrains redirects, not
-client identity; it does not implement a second OAuth server or promise a tested
-client integration. Unknown config client names and duplicate clients/URIs fail.
+Each enabled entry requires at least one exact callback URI, except `chatgpt`
+with `connectorCallbackPattern: true`, where `callbackUris` may be omitted or `[]`.
+Any supplied URIs must still be exact; nothing is guessed or auto-discovered. Each
+OAuth app exposes one DCR allowlist, so the graph flattens the validated per-client
+lists into that exact union by default. This constrains
+redirects, not client identity; it does not implement a second OAuth server or
+promise a tested client integration. Unknown config client names and duplicate
+clients/URIs fail.
 
-| `client` | Allowed exact URI form |
-| --- | --- |
-| `chatgpt` | `https://chatgpt.com/connector/oauth/<callback-id>` with a nonempty alphanumeric/underscore/hyphen ID shown by the actual connector, or `https://chatgpt.com/connector_platform_oauth_redirect` only when shown by that flow. |
-| `claude` | `https://claude.ai/api/mcp/auth_callback`. |
-| `local-probe` | Only with `allowLocalProbe:true`: `http://127.0.0.1:<explicit-port>/callback` with a matching running listener. Port changes require an exact config update. |
+| `client` | Allowed exact URI form in `callbackUris` | Optional `connectorCallbackPattern` |
+| --- | --- | --- |
+| `chatgpt` | `https://chatgpt.com/connector/oauth/<callback-id>` with a nonempty alphanumeric/underscore/hyphen ID, or `https://chatgpt.com/connector_platform_oauth_redirect`. Record the actual URI when available. May be omitted or `[]` only with the opt-in. | Defaults to `false`; `true` adds only `https://chatgpt.com/connector/oauth/*` to the primary MCP app's DCR allowlist. |
+| `claude` | `https://claude.ai/api/mcp/auth_callback`. | Not allowed, even if `false`. |
+| `local-probe` | Only with `allowLocalProbe:true`: `http://127.0.0.1:<explicit-port>/callback` with a matching running listener. Port changes require an exact config update. | Not allowed, even if `false`. |
 
-All other callbacks fail validation, including wildcard/encoded wildcard paths,
-localhost/IPv6 loopback, credentials, queries, fragments and unexpected hosts or
-paths. Local probe callbacks fail by default. Both
+For a new ChatGPT setup, add this entry to `mcpClients` in your private config
+before deploying and creating the connector:
+
+```json
+{
+  "client": "chatgpt",
+  "connectorCallbackPattern": true
+}
+```
+
+Cloudflare Access Managed OAuth does not advertise RFC 9207
+`authorization_response_iss_parameter_supported`. New ChatGPT connectors therefore
+use `https://chatgpt.com/connector/oauth/<callback-id>`, with an ID unknown before
+connector creation; an exact-only allowlist rejects fresh dynamic client
+registration (DCR). The opt-in appends exactly the single Cloudflare HTTPS path
+pattern above to the primary `/mcp` app (`McpPath` with `legacyMcpHostname`, otherwise
+`Mcp`, including split mode). A clean config with only the entry above produces
+exactly `["https://chatgpt.com/connector/oauth/*"]` on the primary app.
+
+For migration with `legacyMcpHostname`, retain the existing exact `callbackUris`
+on their client entries: legacy keeps exactly that flattened list, while primary
+gets the same exact list plus the pattern once. The flattened exact list must be
+nonempty when a legacy host is configured; a pattern-only migration config is
+rejected. Dashboard OAuth remains disabled. Without the flag, the graph is unchanged.
+
+This permits **any ChatGPT connector** to register a callback ID, rather than only
+an individually listed connector. Access policy and configured principals still
+gate login. Use the opt-in only when that registration scope is acceptable;
+keep it disabled for exact-only registration. It does not add another OAuth
+server or change where application data is stored.
+
+All wildcards in `callbackUris` still fail validation, including the literal
+opt-in pattern, encoded `%2A`, broader paths and wildcard hosts. Other rejected
+callbacks include localhost/IPv6 loopback, credentials, queries, fragments and
+unexpected hosts or paths. Local probe callbacks fail by default. Both
 `allowAnyOnLocalhost` and `allowAnyOnLoopback` are always false, including when the
-exact local listener is enabled. No broad opt-out exists. The provider declaration
-currently describes HTTPS URIs; the explicitly opted-in exact HTTP loopback case
-is retained from the design and must be confirmed against the actual service in
-separate-account validation before claiming local-probe support.
+exact local listener is enabled. No broader pattern opt-out exists. The provider
+declaration currently describes HTTPS URIs; the explicitly opted-in exact HTTP
+loopback case is retained from the design and must be confirmed against the actual
+service in separate-account validation before claiming local-probe support.
 
 Before advertising a client, inspect its actual `redirect_uri` and sanitized
 Access readback, complete login/consent, authorization code/PKCE as applicable,

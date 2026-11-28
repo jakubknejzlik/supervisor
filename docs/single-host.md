@@ -198,16 +198,34 @@ actual IdP login email, log in to the dashboard, and approve client consent.
 organization. An optional broad token-minting bootstrap is only a proposal and
 is not the default; it is unnecessary for this graph.
 
-The schema allows the exact ChatGPT fixed callback
+Supplied `callbackUris` must be exact, accepting the ChatGPT fixed callback
 `https://chatgpt.com/connector_platform_oauth_redirect` and per-connector
-`https://chatgpt.com/connector/oauth/<id>`. **Unverified:** which URI the current
-client sends. Record the actual `redirect_uri` and allow only that exact URI.
-Do not claim a fixed callback removes a temporary discovery-window/capture step
-until verified. If a separate approved capture procedure is required for a
-per-connector callback, keep it bounded, force it closed and narrow the allowlist
-after capture; this change does not implement such a procedure. No wildcard or
-open-registration mode is introduced. Exact loopback callback support also
-remains unverified against the provider.
+`https://chatgpt.com/connector/oauth/<id>`. Cloudflare Access Managed OAuth does not
+advertise RFC 9207 `authorization_response_iss_parameter_supported`, so new ChatGPT
+connectors use per-connector callback IDs unknown before creation. Exact-only DCR
+therefore rejects a fresh connector.
+
+For a new ChatGPT setup, opt in with the
+[ChatGPT config example](setup.md#exact-mcp-callbacks), deploy through the normal
+reviewed process, then create the connector at `https://<host>/mcp`. For a clean
+setup, the entry is `{ "client": "chatgpt", "connectorCallbackPattern": true }`;
+`callbackUris` may be omitted or `[]` only with this ChatGPT opt-in.
+`connectorCallbackPattern: true` is allowed only on the `chatgpt` entry and
+defaults to `false`. It appends exactly
+`https://chatgpt.com/connector/oauth/*` to the primary `/mcp` app's DCR allowlist:
+`McpPath` in single+legacy mode, `Mcp` otherwise (including split mode). The legacy
+host's `Mcp` app keeps only the exact callbacks, and Dashboard OAuth stays disabled.
+A clean setup gives primary exactly `["https://chatgpt.com/connector/oauth/*"]`.
+During migration, keep the existing exact URIs: legacy gets exactly the flattened
+exact list, and primary gets that list plus the pattern once. With
+`legacyMcpHostname`, an empty flattened exact list is a config error. No flag means
+an unchanged graph. Every other client, and ChatGPT without the flag, still requires
+at least one exact URI. Literal or encoded wildcards in `callbackUris` still fail.
+
+The opt-in allows **any ChatGPT connector** callback ID to register. Access policy
+and configured principals still gate login; enable it only if this registration
+scope is acceptable. With the flag disabled, record and list each actual callback
+URI. Exact loopback callback support remains unverified against the provider.
 
 ## Remaining deployment acceptance
 

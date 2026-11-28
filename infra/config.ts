@@ -39,10 +39,17 @@ const common = z.object({
   oauthSessionDuration: duration('336h', 31 * 86400),
   oauthAccessTokenLifetime: duration('15m', 86400),
   allowLocalProbe: z.boolean().default(false),
-  mcpClients: z.array(z.object({
-    client: z.enum(['chatgpt', 'claude', 'local-probe']),
-    callbackUris: z.array(z.string().min(1)).min(1),
-  }).strict()).min(1).refine(values => unique(values.map(value => value.client)), 'Duplicate client'),
+  mcpClients: z.array(z.union([
+    z.object({
+      client: z.literal('chatgpt'),
+      callbackUris: z.array(z.string().min(1)).default([]),
+      connectorCallbackPattern: z.boolean().default(false),
+    }).strict().refine(client => client.connectorCallbackPattern || client.callbackUris.length > 0, 'Exact callbacks required without pattern opt-in'),
+    z.object({
+      client: z.enum(['claude', 'local-probe']),
+      callbackUris: z.array(z.string().min(1)).min(1),
+    }).strict(),
+  ])).min(1).refine(values => unique(values.map(value => value.client)), 'Duplicate client'),
   // The runtime deliberately has one stable singleton per new namespace.
   storeKey: z.literal('supervisor-store-v1').default('supervisor-store-v1'),
   displayTimezone: z.string().refine(value => {
@@ -60,6 +67,7 @@ const schema = z.union([
     : { dashboardHostname: config.dashboardHostname, mcpHostname: config.mcpHostname };
   if ('hostname' in config) {
     if (config.legacyMcpHostname === config.hostname) reject('legacyMcpHostname');
+    if (config.legacyMcpHostname && !config.mcpClients.some(client => client.callbackUris.length > 0)) reject('mcpClients');
   } else if (config.dashboardHostname === config.mcpHostname) reject('mcpHostname');
   for (const [key, host] of Object.entries(hosts)) {
     if (host !== undefined && !host.endsWith('.' + config.zoneName)) reject(key);
