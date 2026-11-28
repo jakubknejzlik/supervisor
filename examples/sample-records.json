@@ -20,7 +20,20 @@
         "preview": [],
         "issues": [],
         "other": []
-      }
+      },
+      "category": "Operations"
+    }
+  },
+  {
+    "id": "sample:legacy",
+    "expectedRev": 0,
+    "patch": {
+      "name": "Legacy sample task",
+      "project": "sample",
+      "agent": "Sample agent",
+      "owner": "Sample operator",
+      "state": "running",
+      "status": "No explicit category; grouped by agent at read time"
     }
   }
 ]

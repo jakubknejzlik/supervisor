@@ -4,6 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
+    "./category": "./src/category.ts",
     "./schema": "./src/schema.ts",
     "./canonical": "./src/canonical.ts",
     "./identity": "./src/identity.ts",

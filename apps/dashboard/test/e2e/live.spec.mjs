@@ -105,18 +105,18 @@ test('literal agent all has distinct tab labels, counts, filtering and exact URL
   const tabs = page.locator('.agent-tabs button');
   await expect(tabs).toHaveText(['All 2', 'Agent Z 1', 'all 1']);
   await expect(page.locator('#rows .summary-row')).toHaveCount(2);
-  const literal = page.locator('[data-agent="all"]');
+  const literal = page.locator('[data-category="all"]');
   await literal.click();
   await expect(literal).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.agent-tabs [aria-pressed="true"]')).toHaveCount(1);
   await expect(page.locator('#rows .summary-row')).toHaveCount(1);
   await expect(page.locator('#rows [data-record-id="filter:literal-agent"]')).toBeVisible();
-  await expect(page).toHaveURL('http://filters.test/?agent=all');
+  await expect(page).toHaveURL('http://filters.test/?category=all');
   await page.reload();
   await expect(literal).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#rows .summary-row')).toHaveCount(1);
   await expect(page.locator('#rows [data-record-id="filter:literal-agent"]')).toBeVisible();
-  await expect(page).toHaveURL('http://filters.test/?agent=all');
+  await expect(page).toHaveURL('http://filters.test/?category=all');
   await tabs.first().click();
   await expect(page.locator('#rows .summary-row')).toHaveCount(2);
   await expect(page).toHaveURL('http://filters.test/');
@@ -418,8 +418,8 @@ test('partial MCP links (production Agent C shapes) render in every agent tab an
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.goto(String(base));
     for (const agent of ['', 'Agent A', 'Agent B', 'Agent C']) {
-      await page.locator(`[data-agent="${agent}"]`).click();
-      await expect(page.locator(`[data-agent="${agent}"]`)).toHaveAttribute('aria-pressed', 'true');
+      await page.locator(`[data-category="${agent}"]`).click();
+      await expect(page.locator(`[data-category="${agent}"]`)).toHaveAttribute('aria-pressed', 'true');
       await expect(page.locator('#rows tr.summary-row').first()).toBeVisible();
     }
     await expect(page.locator('#rows tr.summary-row')).toHaveCount(Object.keys(shapes).length);
@@ -449,7 +449,7 @@ test('two authenticated viewers refetch their own attention after WS invalidatio
       await page.addInitScript(() => localStorage.setItem('supervisor.identity', JSON.stringify({ sub: 'test-subject' })));
       await page.goto(`${base}?q=Viewer&sub=test-subject&email=owner%40example.invalid`);
       await expect(page.locator('#connection-status')).toHaveText(/^(Live|Živě)$/);
-      await expect(page.locator('[data-agent="Initial actor"]')).toBeVisible();
+      await expect(page.locator('[data-category="Initial actor"]')).toBeVisible();
     }
     const row = page => page.locator(`[data-record-id="${id}"]`);
     await expect(row(pages[0])).toHaveClass(/needs-you/);
@@ -466,8 +466,8 @@ test('two authenticated viewers refetch their own attention after WS invalidatio
     for (const page of pages) {
       await expect(page.locator('#waiting-you')).toBeChecked();
       await expect(page.locator('#search')).toHaveValue('Viewer');
-      await expect(page.locator('[data-agent="New actor"]')).toBeVisible();
-      await expect(page.locator('[data-agent="Initial actor"]')).toHaveCount(0);
+      await expect(page.locator('[data-category="New actor"]')).toBeVisible();
+      await expect(page.locator('[data-category="Initial actor"]')).toHaveCount(0);
     }
   } finally { await Promise.all(contexts.map(context => context.close())); }
 });
@@ -477,9 +477,95 @@ test('empty store displays only the All actor tab', async ({ browser }) => {
   try {
     const page = await context.newPage();
     await page.goto(String(await empty.ready));
-    await expect(page.locator('[data-agent]')).toHaveCount(1);
-    await expect(page.locator('[data-agent=""]')).toBeVisible();
+    await expect(page.locator('[data-category]')).toHaveCount(1);
+    await expect(page.locator('[data-category=""]')).toBeVisible();
     await expect(page.locator('#empty')).toBeVisible();
     await expect(page).toHaveTitle('Supervisor Dashboard');
   } finally { await context.close(); await empty.dispose(); }
+});
+
+test('legacy production-shaped records retain their exact tab set and counts; agent URL is canonicalized', async ({ page }) => {
+  const row = { kind: 'Task', state: 'running', links: {} };
+  await filterFixture(page, [
+    { ...row, id: 'legacy:1', name: 'First', agent: 'Agent A', project: 'sample-a', owner: 'Operator A' },
+    { ...row, id: 'legacy:2', name: 'Second', agent: 'Agent A', project: 'sample-b', owner: 'Operator B' },
+    { ...row, id: 'legacy:3', name: 'Third', agent: 'Agent B', project: 'sample-a', owner: 'Operator A' },
+    { ...row, id: 'legacy:4', name: 'Fourth', project: 'sample-c', owner: 'Operator C' },
+    { ...row, id: 'legacy:5', name: 'Fifth', agent: '', project: 'sample-c', owner: 'Operator C' },
+    { ...row, id: 'legacy:6', name: 'Sixth', owner: 'Operator D' },
+  ]);
+  await expect(page.locator('.agent-tabs button')).toHaveText(['All 6', 'Agent A 2', 'Agent B 1', 'sample-c 2']);
+  await page.goto('http://filters.test/?agent=Agent+A');
+  await expect(page).toHaveURL('http://filters.test/?category=Agent+A');
+  await expect(page.locator('[data-category="Agent A"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#rows .summary-row')).toHaveCount(2);
+  await page.reload();
+  await expect(page.locator('[data-category="Agent A"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.goto('http://filters.test/?agent=Agent+A&category=sample-c');
+  await expect(page).toHaveURL('http://filters.test/?category=sample-c');
+  await expect(page.locator('[data-category="sample-c"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#rows .summary-row')).toHaveCount(2);
+});
+
+test('explicit category adds distinct row/detail tags, keeps agent/owner, and is searchable', async ({ page }) => {
+  await filterFixture(page, [
+    { id: 'category:distinct', name: 'Categorized task', agent: 'Agent A', owner: 'Operator', category: 'Operations', state: 'running' },
+    { id: 'category:same', name: 'Same label', agent: 'Agent B', category: 'Agent B', state: 'running' },
+  ]);
+  await expect(page.getByRole('group', { name: 'Filter by category' })).toBeVisible();
+  await expect(page.locator('.agent-tabs button')).toHaveText(['All 2', 'Agent B 1', 'Operations 1']);
+  const row = page.locator('[data-record-id="category:distinct"]');
+  await expect(row.locator('.agent-tag:not(.category-tag)')).toHaveText('Agent A');
+  await expect(row.locator('.category-tag')).toHaveText('Operations');
+  await expect(page.locator('[data-record-id="category:same"] .category-tag')).toHaveCount(0);
+  await page.locator('#search').fill('operations');
+  await expect(page.locator('#rows .summary-row')).toHaveCount(1);
+  await row.getByRole('button', { name: 'Categorized task', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.agent-tag:not(.category-tag)')).toHaveText('Agent A');
+  await expect(dialog.locator('.category-tag')).toHaveText('Operations');
+  await expect(dialog).toContainText('Operator');
+  await page.keyboard.press('Escape');
+  await page.locator('#locale').selectOption('cs');
+  await expect(page.getByRole('group', { name: 'Filtrovat podle kategorie' })).toBeVisible();
+});
+
+test('category selection survives reload and live additions, resetting only after its final record leaves', async ({ browser }) => {
+  const prefix = 'category:live-';
+  const write = async (suffix, expectedRev, patch) => {
+    const result = await client.callTool({ name: 'upsert_record', arguments: { id: prefix + suffix, expectedRev, patch } });
+    expect(result.isError).not.toBe(true);
+  };
+  await write('first', 0, { name: 'Category live first', category: 'Live category', agent: 'Live agent', owner: 'Operator', state: 'running' });
+  await withDashboard(browser, async page => {
+    await page.goto(String(base));
+    const selected = page.locator('[data-category="Live category"]');
+    await selected.click();
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    expect(new URL(page.url()).searchParams.get('category')).toBe('Live category');
+    await page.reload();
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#rows .summary-row')).toHaveCount(1);
+    await expect(page.locator('#connection-status')).toHaveText(/^(Live|Živě)$/);
+    await page.evaluate(() => { window.__categoryNoReload = true; });
+    await write('second', 0, { name: 'Category live second', category: 'Live category', agent: 'Other live agent', state: 'running' });
+    await expect(selected.locator('span')).toHaveText('2');
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#rows .summary-row')).toHaveCount(2);
+    await write('other', 0, { name: 'Category live other', category: 'Other live category', state: 'running' });
+    await expect(page.locator('[data-category="Other live category"]')).toBeVisible();
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#rows .summary-row')).toHaveCount(2);
+    await write('first', 1, { category: null });
+    await expect(selected.locator('span')).toHaveText('1');
+    await expect(selected).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#rows .summary-row')).toHaveCount(1);
+    await write('second', 1, { category: null });
+    await expect(selected).toHaveCount(0);
+    await expect(page.locator('[data-category=""]')).toHaveAttribute('aria-pressed', 'true');
+    expect(new URL(page.url()).searchParams.has('category')).toBe(false);
+    expect(await page.evaluate(() => window.__categoryNoReload)).toBe(true);
+    await expect(page.locator('[data-category="Live agent"]')).toBeVisible();
+    await expect(page.locator('[data-category="Other live agent"]')).toBeVisible();
+  });
 });

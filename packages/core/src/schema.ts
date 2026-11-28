@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CATEGORY_CHARACTERS, CATEGORY_MAX_LENGTH } from './category';
 
 const id = z.string().min(1).max(200);
 const expectedRev = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER - 1);
@@ -10,10 +11,12 @@ export const requestedPrincipal = z.union([
 ]);
 export const requestedFrom = z.array(requestedPrincipal).max(100);
 export type RequestedPrincipal = z.infer<typeof requestedPrincipal>;
-// Other record fields remain extensible; identity requests are validated on writes.
-export const recordPatch = z.object({ requestedFrom: requestedFrom.optional(), waitingOnYou: z.never().optional() }).catchall(z.unknown());
+// Check controls before trimming so leading/trailing control characters cannot disappear.
+export const category = z.string().regex(CATEGORY_CHARACTERS).trim().min(1).max(CATEGORY_MAX_LENGTH);
+// Other record fields remain extensible; known fields are validated on writes.
+export const recordPatch = z.object({ category: category.nullable().optional(), requestedFrom: requestedFrom.optional(), waitingOnYou: z.never().optional() }).catchall(z.unknown());
 export const schemas = {
-  list_records: z.object({ prefix: z.string().max(200).optional(), limit }).strict(),
+  list_records: z.object({ prefix: z.string().max(200).optional(), category: category.optional(), limit }).strict(),
   get_record: z.object({ id }).strict(),
   upsert_record: z.object({ id, expectedRev, patch: recordPatch }).strict(),
   check_record: z.object({

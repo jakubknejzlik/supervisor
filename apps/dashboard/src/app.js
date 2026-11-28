@@ -1,3 +1,4 @@
+import { effectiveCategory } from '@supervisor/core/category';
 import { resolveLocale, persistLocale, translate, formatTimestamp, stateKey } from '@supervisor/core/i18n';
 'use strict';
 // Pure policy functions shared with the Node unit tests.
@@ -100,7 +101,7 @@ if (typeof document !== 'undefined') {
   const $ = (id) => /** @type {any} */ (document.getElementById(id));
   const controls = { search: $('search'), state: $('state'), sort: $('sort'), done: $('include-done'), you: $('waiting-you') };
   const params = new URLSearchParams(location.search);
-  let agent = params.get('agent');
+  let category = params.get('category') ?? params.get('agent');
   const fold = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const formatDate = value => formatTimestamp(value, locale, data.timezone || 'UTC');
   const stateLabel = record => record.generatedLabels?.state ? t(record.generatedLabels.state, record.generatedLabels.values) : record.stateLabel || t(stateKey(record.state));
@@ -144,20 +145,20 @@ if (typeof document !== 'undefined') {
   controls.sort.value = ['checked-desc', 'checked-asc', 'name'].includes(params.get('sort')) ? params.get('sort') : 'checked-desc';
   controls.done.checked = params.get('done') === '1' || selectedState() === 'done';
   controls.you.checked = params.get('you') === '1';
-  function updateAgents() {
-    const actors = [...new Set(records.map(r => r.agent || r.project).filter(Boolean))].sort();
-    if (!actors.includes(agent)) agent = null;
+  function updateCategories() {
+    const categories = [...new Set(records.map(effectiveCategory).filter(Boolean))].sort();
+    if (!categories.includes(category)) category = null;
     const tabs = document.querySelector('.agent-tabs');
     tabs.replaceChildren();
-    for (const actor of [null, ...actors]) {
-      const button = el('button', actor === null ? t('allAgents') + ' ' : actor + ' ');
-      button.type = 'button'; button.dataset.agent = actor ?? '';
-      button.append(el('span', String(records.filter(r => actor === null || (r.agent || r.project) === actor).length)));
-      button.addEventListener('click', () => { agent = actor; render(); });
+    for (const value of [null, ...categories]) {
+      const button = el('button', value === null ? t('allCategories') + ' ' : value + ' ');
+      button.type = 'button'; button.dataset.category = value ?? '';
+      button.append(el('span', String(records.filter(r => value === null || effectiveCategory(r) === value).length)));
+      button.addEventListener('click', () => { category = value; render(); });
       tabs.append(button);
     }
   }
-  updateAgents();
+  updateCategories();
   function cell(label, cls) {
     const td = el('td', undefined, cls); td.dataset.label = label; return td;
   }
@@ -226,6 +227,10 @@ if (typeof document !== 'undefined') {
     grid.append(sources);
     return grid;
   }
+  function recordCategoryTag(record) {
+    const value = effectiveCategory(record);
+    return value && value !== record.agent ? el('span', value, 'category-tag agent-tag') : null;
+  }
   function recordRow(record) {
     const tr = el('tr', undefined, 'summary-row'); tr.dataset.recordId = record.id;
     const name = cell(t('taskAgent'), 'task-cell');
@@ -238,6 +243,8 @@ if (typeof document !== 'undefined') {
     title.title = record.name;
     const tags = el('div', undefined, 'tags');
     tags.append(el('span', record.agent, 'agent-tag ' + record.project));
+    const categoryTag = recordCategoryTag(record);
+    if (categoryTag) tags.append(categoryTag);
     if (kindLabel(record)) tags.append(el('span', kindLabel(record), 'kind'));
     if (needsYou(record)) {
       const attention = el('span', t('attention'), 'attention-tag');
@@ -274,11 +281,11 @@ if (typeof document !== 'undefined') {
     const query = fold(controls.search.value.trim());
     const state = selectedState();
     const filtered = records.filter(record =>
-      (agent === null || (record.agent || record.project) === agent) &&
+      (category === null || effectiveCategory(record) === category) &&
       (state === null || record.state === state) &&
       (controls.done.checked || record.state !== 'done' || state === 'done') &&
       (!controls.you.checked || needsYou(record)) &&
-      (!query || fold([record.nextAction ? record.nextAction.label : '', record.implementer, record.jiraAssignee, record.name, record.goal, record.agent, record.owner, record.status, record.nextStep, record.waitingOn, record.recordId].join(' ')).includes(query))
+      (!query || fold([record.nextAction ? record.nextAction.label : '', record.implementer, record.jiraAssignee, record.name, record.goal, effectiveCategory(record), record.agent, record.owner, record.status, record.nextStep, record.waitingOn, record.recordId].join(' ')).includes(query))
     );
     filtered.sort((a, b) => {
       const attentionOrder = Number(needsYou(b)) - Number(needsYou(a));
@@ -292,9 +299,9 @@ if (typeof document !== 'undefined') {
     $('rows').replaceChildren(...filtered.map(recordRow));
     $('empty').hidden = filtered.length > 0;
     $('result-count').textContent = t('resultCount', { shown: filtered.length, total: records.length });
-    (/** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('[data-agent]'))).forEach(button => button.setAttribute('aria-pressed', String(button.dataset.agent === (agent ?? ''))));
+    (/** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('[data-category]'))).forEach(button => button.setAttribute('aria-pressed', String(button.dataset.category === (category ?? ''))));
     const nextParams = new URLSearchParams();
-    if (agent !== null) nextParams.set('agent', agent);
+    if (category !== null) nextParams.set('category', category);
     if (controls.search.value.trim()) nextParams.set('q', controls.search.value.trim());
     if (state !== null) nextParams.set('state', state);
     if (controls.done.checked) nextParams.set('done', '1');
@@ -381,6 +388,10 @@ if (typeof document !== 'undefined') {
       value.dataset.field = 'rev'; rev.append(value);
       meta.push(el('span', stateLabel(record), 'badge state-' + record.state), el('span', record.agent, 'agent-tag ' + record.project), rev);
     }
+    if (record) {
+      const categoryTag = recordCategoryTag(record);
+      if (categoryTag) meta.push(categoryTag);
+    }
     const id = el('code', selectedRecordId, 'record-id'); id.id = 'record-modal-id'; id.setAttribute('aria-label', t('recordId'));
     $('record-modal-meta').replaceChildren(...meta, id);
     if (renderedRecordId !== selectedRecordId) {
@@ -431,7 +442,7 @@ if (typeof document !== 'undefined') {
   controls.search.addEventListener('input', render);
   [controls.state, controls.sort, controls.done, controls.you].forEach(control => control.addEventListener('change', render));
   $('reset').addEventListener('click', () => {
-    agent = null; controls.search.value = ''; controls.state.selectedIndex = 0; controls.sort.value = 'checked-desc'; controls.done.checked = false; controls.you.checked = false; render();
+    category = null; controls.search.value = ''; controls.state.selectedIndex = 0; controls.sort.value = 'checked-desc'; controls.done.checked = false; controls.you.checked = false; render();
   });
   function updateTab() {
     const attentionCount = records.filter(needsYou).length;
@@ -448,7 +459,7 @@ if (typeof document !== 'undefined') {
     $('stat-open').textContent = String(records.filter(r => r.state !== 'done').length);
     $('stat-review').textContent = String(records.filter(r => ['review', 'verification'].includes(r.state)).length);
     $('stat-done').textContent = String(records.filter(r => r.state === 'done').length);
-    updateAgents(); updateStates();
+    updateCategories(); updateStates();
     $('revision').textContent = data.sourceRevision ? t('sourceRevision', { revision: data.sourceRevision.slice(0, 8) }) : '';
   }
   function setStatus(node, key) { node.dataset.i18n = key; node.textContent = t(key); }

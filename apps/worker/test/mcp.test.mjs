@@ -29,6 +29,48 @@ async function create(id, patch = {}) {
 async function audit(id) { return (await tool('get_audit', { recordId: id })).value; }
 
 describe('SQLite DO via real MCP SDK', () => {
+  it('round-trips category, filters before limit, and clears to the legacy fallback without changing attribution', async () => {
+    const prefix = 'synthetic:category:';
+    const legacy = { agent: 'Agent A', project: 'sample', owner: 'Operator', extra: { keep: true } };
+    const skipped = await create(prefix + '0', { ...legacy, category: 'Other' });
+    const original = await create(prefix + '1', legacy);
+    const fallback = await create(prefix + '2', { project: 'sample', owner: 'Operator' });
+    expect(original.data).not.toHaveProperty('category');
+    expect((await tool('list_records', { prefix, category: 'Agent A' })).value).toEqual([original]);
+    const updated = (await tool('upsert_record', { id: original.id, expectedRev: original.rev, patch: { category: ' Operations ' } })).value;
+    expect(updated.data).toEqual({ ...legacy, category: 'Operations' });
+    expect((await tool('get_record', { id: original.id })).value).toEqual(updated);
+    expect((await tool('list_records', { prefix })).value).toEqual([skipped, updated, fallback]);
+    expect((await tool('list_records', { prefix, category: ' Operations ', limit: 1 })).value).toEqual([updated]);
+    expect((await tool('list_records', { prefix, category: 'operations' })).value).toEqual([]);
+    const cleared = (await tool('upsert_record', { id: original.id, expectedRev: updated.rev, patch: { category: null } })).value;
+    expect(cleared.data).toEqual({ ...legacy, category: null });
+    expect((await tool('get_record', { id: original.id })).value).toEqual(cleared);
+    expect((await tool('list_records', { prefix, category: 'Operations' })).value).toEqual([]);
+    expect((await tool('list_records', { prefix, category: 'Agent A' })).value).toEqual([cleared]);
+    expect((await tool('list_records', { prefix, category: 'sample' })).value).toEqual([fallback]);
+    const projectCategory = (await tool('upsert_record', { id: fallback.id, expectedRev: 1, patch: { category: 'Operations' } })).value;
+    expect(projectCategory.data).toEqual({ ...fallback.data, category: 'Operations' });
+    const projectCleared = (await tool('upsert_record', { id: fallback.id, expectedRev: 2, patch: { category: null } })).value;
+    expect((await tool('list_records', { prefix, category: 'sample' })).value).toEqual([projectCleared]);
+    const preserved = (await tool('upsert_record', { id: original.id, expectedRev: cleared.rev, patch: { status: 'Updated' } })).value;
+    expect(preserved.data).toEqual({ ...legacy, category: null, status: 'Updated' });
+    expect((await audit(original.id))[1].changedFields).toEqual(['data.category', 'rev', 'updatedAt']);
+  });
+  it('rejects invalid category writes and list filters at the MCP boundary without mutation', async () => {
+    const id = 'synthetic:category-validation';
+    const original = await create(id, { agent: 'Agent A', owner: 'Operator', category: 'a'.repeat(64) });
+    for (const category of ['', '   ', 'a'.repeat(65), '\tCategory', 'Category\n', 'A\u0000B', 'A\u007fB', 42, false, {}, []]) {
+      expect((await client.callTool({ name: 'upsert_record', arguments: { id, expectedRev: 1, patch: { category } } })).isError).toBe(true);
+      expect((await client.callTool({ name: 'list_records', arguments: { category } })).isError).toBe(true);
+    }
+    expect((await client.callTool({ name: 'list_records', arguments: { category: null } })).isError).toBe(true);
+    expect((await tool('get_record', { id })).value).toEqual(original);
+    expect(await audit(id)).toHaveLength(1);
+    const { tools } = await client.listTools();
+    expect(tools.find(t => t.name === 'list_records').inputSchema.properties).toHaveProperty('category');
+    expect(tools.find(t => t.name === 'upsert_record').inputSchema.properties.patch.properties).toHaveProperty('category');
+  });
   it('requires expectedRev 0 for a new record and reports current rev without writing', async () => {
     const id = 'synthetic:new';
     expect(await tool('upsert_record', { id, expectedRev: 4, patch: {} })).toEqual({ failed: true, value: { error: 'rev_conflict', currentRev: 0 } });

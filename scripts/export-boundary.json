@@ -206,6 +206,10 @@
       "to": "packages/core/src/canonical.ts"
     },
     {
+      "from": "packages/core/src/category.ts",
+      "to": "packages/core/src/category.ts"
+    },
+    {
       "from": "packages/core/src/i18n.ts",
       "to": "packages/core/src/i18n.ts"
     },
@@ -228,6 +232,10 @@
     {
       "from": "packages/core/test/canonical.test.mjs",
       "to": "packages/core/test/canonical.test.mjs"
+    },
+    {
+      "from": "packages/core/test/category.test.mjs",
+      "to": "packages/core/test/category.test.mjs"
     },
     {
       "from": "packages/core/test/i18n.test.mjs",

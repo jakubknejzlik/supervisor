@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import { effectiveCategory } from '@supervisor/core/category';
 import { schemas, isWrite, StoreError, type Tool, type Identity, type RecordValue } from '@supervisor/core/schema';
 
 type Row = { id: string; data: string; rev: number; checkedAt: string | null; updatedAt: string };
@@ -74,8 +75,12 @@ export class SupervisorStore extends DurableObject<StoreEnv> {
     const args = schemas[tool].parse(raw);
     const sql = this.ctx.storage.sql;
     if (tool === 'list_records') {
-      const { prefix = '', limit = 100 } = args as { prefix?: string; limit?: number };
+      const { prefix = '', category, limit = 100 } = args as { prefix?: string; category?: string; limit?: number };
       // instr treats %/_ literally and handles Unicode prefixes without JS length.
+      if (category !== undefined) {
+        return sql.exec<Row>('SELECT * FROM records WHERE instr(id, ?) = 1 ORDER BY id', prefix).toArray()
+          .map(decode).filter(record => effectiveCategory(record.data) === category).slice(0, limit);
+      }
       return sql.exec<Row>('SELECT * FROM records WHERE instr(id, ?) = 1 ORDER BY id LIMIT ?', prefix, limit).toArray().map(decode);
     }
     if (tool === 'get_record') {
