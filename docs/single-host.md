@@ -66,7 +66,8 @@ Managed OAuth assessment. Hostnames and audience values are placeholders.
 | --- | --- |
 | `/`, `/api/state`, `/api/ws`; `/api/ws` also with WebSocket upgrade headers | 302 to Access login. The login URL's `kid` is the dashboard application's AUD. Response header: `WWW-Authenticate: Cloudflare-Access resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/<path>"`, scoped to the requested path. |
 | Exact `/mcp` and `/mcp/x` | 401 from the MCP Access application, with `WWW-Authenticate: Bearer realm="OAuth", error="invalid_token", ... resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/mcp"`. No redirect to browser login. |
-| `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` | 200 from Access. Both protected-resource metadata responses have `resource` exactly `https://<host>/mcp` and `authorization_servers` equal to an array containing only the configured Access team domain. |
+| Root metadata: `/.well-known/oauth-protected-resource` and `/.well-known/cloudflare-access-protected-resource` (no suffix) | 200 from Access. `resource` is the host root `https://<host>`, not the MCP endpoint. Do not use these documents for the MCP client. |
+| Scoped metadata: `/.well-known/oauth-protected-resource/mcp` and `/.well-known/cloudflare-access-protected-resource/mcp` | 200 from Access. `resource` is exactly `https://<host>/mcp`; `authorization_servers` is an array containing only the configured Access team domain. The 401 challenge on `/mcp` advertises the `cloudflare-access-protected-resource/mcp` document. |
 | `/.well-known/oauth-authorization-server` | 200 from Access. |
 | Provider readback: Access applications | Two independent applications with distinct AUDs. Dashboard: `domain=<host>`, Managed OAuth disabled. MCP: destinations `<host>/mcp` and `<host>/.well-known/*`, Managed OAuth enabled. |
 | Provider readback: MCP DCR | `allowed_uris` contains only the configured callbacks; localhost and loopback are both false. This is configuration evidence, not a completed client registration. |
@@ -107,14 +108,18 @@ Route-specific audience validation prevents token crossover even if that occurs.
     -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" "https://$DEPLOY_HOST/api/ws"
   ```
 
-- [ ] Inspect discovery status and JSON. Both protected-resource responses must
-  identify exactly `https://$DEPLOY_HOST/mcp` and the configured team domain in
-  `authorization_servers`. Also fetch the exact `resource_metadata` URL advertised
-  by the MCP challenge with the same anonymous curl options.
+- [ ] Inspect discovery status and JSON. Root and scoped metadata differ: the
+  documents without a suffix identify the host root `https://$DEPLOY_HOST`; the
+  `/mcp`-suffixed documents identify exactly `https://$DEPLOY_HOST/mcp` with the
+  configured team domain in `authorization_servers`. For MCP, take the exact
+  `resource_metadata` URL from the `/mcp` 401 challenge and fetch it with the same
+  anonymous curl options; its `resource` must be `https://$DEPLOY_HOST/mcp`.
 
   ```sh
   for path in /.well-known/oauth-protected-resource \
     /.well-known/oauth-protected-resource/mcp \
+    /.well-known/cloudflare-access-protected-resource \
+    /.well-known/cloudflare-access-protected-resource/mcp \
     /.well-known/oauth-authorization-server; do
     curl -q --max-time 15 -sS -i -H 'Cookie:' -H 'Authorization:' "https://$DEPLOY_HOST$path"
   done

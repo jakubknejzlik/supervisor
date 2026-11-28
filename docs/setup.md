@@ -204,8 +204,10 @@ probes should show:
 - fetching that exact `<url>` from the header returns 200 and its `resource`
   field equals `https://<mcp-host>/mcp`, including the `/mcp` path. Follow the
   header value rather than guessing a well-known path. On the isolated single-host
-  stage, both `/.well-known/oauth-protected-resource` and its `/mcp` suffix
-  identified exactly `https://<host>/mcp`;
+  stage, the root documents `/.well-known/oauth-protected-resource` and
+  `/.well-known/cloudflare-access-protected-resource` identified the host root
+  `https://<host>`; only their `/mcp`-suffixed variants identified exactly
+  `https://<host>/mcp`;
 - `/.well-known/oauth-authorization-server` on the MCP host returns 200.
 
 ### Connect a client and verify
