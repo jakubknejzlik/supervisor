@@ -104,9 +104,10 @@ The projection is never a stored field and never grants write access.
 
 ## Deployment configuration (offline-checked implementation)
 
-The resource graph is implemented and checked offline. No real account, minimal
-permission token or OAuth client flow has been validated yet. That is separate
-account-validation work. Use an independent account with Workers, SQLite Durable
+The resource graph is implemented and checked offline. An isolated test stage's
+[anonymous single-host results and pending signed-in checks](single-host.md#discovery-ownership-and-evidence)
+are recorded separately; minimal token permissions and real OAuth client flows
+remain unverified. Use an independent account with Workers, SQLite Durable
 Objects and R2 enabled, a delegated DNS zone in that account, and an enrolled Zero
 Trust team. Zone/team creation and external IdP setup are prerequisites outside
 this graph. For an existing split installation, follow the non-destructive
@@ -191,7 +192,9 @@ applications, the SST state bucket) untouched. Then run the deploy sequence abov
 
 New custom domains may need time before DNS and TLS answer. In single mode,
 "dashboard host" and "MCP host" below refer to the same configured `hostname`.
-These are acceptance criteria, not verified single-host results. Unauthenticated
+Recheck these acceptance criteria on your deployment. See the
+[observed anonymous single-host results and curl checklist](single-host.md#discovery-ownership-and-evidence)
+for isolated-stage evidence; signed-in checks remain pending. Unauthenticated
 probes should show:
 
 - `/` on the dashboard host redirects (302) to your Access team login;
@@ -200,10 +203,9 @@ probes should show:
   `WWW-Authenticate` header that contains a `resource_metadata="<url>"` value;
 - fetching that exact `<url>` from the header returns 200 and its `resource`
   field equals `https://<mcp-host>/mcp`, including the `/mcp` path. Follow the
-  header value rather than guessing a well-known path: the RFC 9728 path
-  `/.well-known/oauth-protected-resource/mcp` was observed in the background
-  host-wide assessment, while the root resource metadata described only the
-  host. Recheck both on the path-scoped app; do not assume that behavior;
+  header value rather than guessing a well-known path. On the isolated single-host
+  stage, both `/.well-known/oauth-protected-resource` and its `/mcp` suffix
+  identified exactly `https://<host>/mcp`;
 - `/.well-known/oauth-authorization-server` on the MCP host returns 200.
 
 ### Connect a client and verify
@@ -249,10 +251,9 @@ path-scoped app/policy use `McpPathAccess`/`McpPathPolicy`.
 Access owns discovery, registration, authorization and refresh. If a discovery
 request reaches the Worker, it returns no OAuth metadata (404 for an authorized
 dashboard assertion, 403 for a wrong class); there is no second OAuth server.
-**Unverified:** whether Access serves Managed OAuth discovery from a path-scoped
-app with a `/.well-known/*` destination and reports the expected `/mcp` resource.
-Do not claim this works at the edge until separate-account acceptance succeeds.
-See the [single-host assessment and test plan](single-host.md) and provider
+Anonymous path-scoped discovery and the exact `/mcp` resource were observed on an
+isolated test stage. See the [single-host evidence and pending checks](single-host.md#discovery-ownership-and-evidence)
+and provider
 [Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/).
 
 One `sst.cloudflare.Worker` builds `apps/worker/src/worker.ts`, creates the SQLite

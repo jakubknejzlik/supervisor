@@ -1,10 +1,10 @@
 # Single-host deployment: design and remaining verification
 
 The resource graph, route-class assertion checks and local tests are implemented.
-No deployment, Cloudflare API probe, browser login against Access or real client
-OAuth flow is part of this offline change. The observations below were recorded
-in the background assessment of an earlier host-wide Managed OAuth deployment;
-they are context, not verification of this single-host graph.
+A real isolated test stage of this exact single-host graph was deployed and
+probed anonymously, with provider configuration read back. The observations below
+record that stage's path-scoped discovery behavior. Signed-in browser and real
+client OAuth flows remain pending; anonymous results do not verify those flows.
 
 ## Target shape
 
@@ -15,7 +15,7 @@ The graph derives the dashboard and MCP URLs:
 | --- | --- | --- | --- |
 | `/`, `/api/data.json`, `/api/ws`, assets | Worker | Whole-host dashboard, Managed OAuth off | Dashboard only |
 | Exact `/mcp` | Worker | Path-scoped MCP, Managed OAuth on | MCP only |
-| `/.well-known/*` | Intended: Access edge | MCP public destination | Worker never emits OAuth metadata |
+| `/.well-known/*` | Access edge (discovery paths observed below) | MCP public destination | Worker never emits OAuth metadata |
 
 There is one Worker, one custom domain, the same SQLite Durable Object namespace
 and stable `supervisor-store-v1` singleton, and the unchanged `/api/ws` route.
@@ -51,31 +51,78 @@ on either split host accepted that host's AUD, and that behavior is preserved.
 
 The pinned provider's `destinations` field accepts public entries with `uri`.
 The MCP app has both `<host>/mcp` and `<host>/.well-known/*`. The dashboard app
-keeps a host-wide `domain`, with Managed OAuth disabled. The intended more-specific
-Access match must direct discovery to the MCP app, not to browser login.
+keeps a host-wide `domain`, with Managed OAuth disabled. Anonymous probes observed
+the more-specific Access match serving discovery through the MCP application.
+A path-only `/mcp` destination would leave root discovery under the dashboard app.
+The Worker never supplies substitute metadata: authenticated discovery requests
+that reach it return 404 or 403, with no OAuth endpoints or challenge header.
 
-The background assessment recorded these **observations on a host-wide app**:
+### A) Anonymous (no cookie, no token) — observed
 
-- Managed OAuth answered `/.well-known/oauth-authorization-server`,
-  `/.well-known/oauth-protected-resource` (root and `/mcp` suffix), and
-  `/.well-known/cloudflare-access-protected-resource` with JSON.
-- An unauthenticated `POST /mcp` returned 401 with a `resource_metadata` challenge
-  pointing to `/.well-known/cloudflare-access-protected-resource/mcp`.
-- With Managed OAuth disabled, authorization-server discovery redirected to the
-  browser login instead.
+These results came from the isolated test stage, not the earlier host-wide
+Managed OAuth assessment. Hostnames and audience values are placeholders.
 
-The [Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/)
-describes discovery at the application domain; the assessment found no coverage
-of this path-scoped arrangement. **Unverified:** metadata handling for a
-`/.well-known/*` destination of a path-scoped app, precedence at the edge, and
-whether the protected `resource` is `https://<host>/mcp`. A path-only `/mcp`
-destination would leave root discovery under the dashboard app. The Worker
-never supplies substitute metadata: authenticated discovery requests that reach
-it return 404 or 403, with no OAuth endpoints or challenge header.
+| Probe or readback | Observed result |
+| --- | --- |
+| `/`, `/api/state`, `/api/ws`; `/api/ws` also with WebSocket upgrade headers | 302 to Access login. The login URL's `kid` is the dashboard application's AUD. Response header: `WWW-Authenticate: Cloudflare-Access resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/<path>"`, scoped to the requested path. |
+| Exact `/mcp` and `/mcp/x` | 401 from the MCP Access application, with `WWW-Authenticate: Bearer realm="OAuth", error="invalid_token", ... resource_metadata="https://<host>/.well-known/cloudflare-access-protected-resource/mcp"`. No redirect to browser login. |
+| `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` | 200 from Access. Both protected-resource metadata responses have `resource` exactly `https://<host>/mcp` and `authorization_servers` equal to an array containing only the configured Access team domain. |
+| `/.well-known/oauth-authorization-server` | 200 from Access. |
+| Provider readback: Access applications | Two independent applications with distinct AUDs. Dashboard: `domain=<host>`, Managed OAuth disabled. MCP: destinations `<host>/mcp` and `<host>/.well-known/*`, Managed OAuth enabled. |
+| Provider readback: MCP DCR | `allowed_uris` contains only the configured callbacks; localhost and loopback are both false. This is configuration evidence, not a completed client registration. |
+| Provider readback: dashboard DCR | Provider defaults keep localhost and loopback true. These settings are inert while dashboard Managed OAuth is disabled. |
+| Worker binding readback | `ACCESS_AUDS = {"<host>": {"dashboard": ["<dashboard AUD>"], "mcp": ["<mcp AUD>"]}}`. |
+
+Access matching `/mcp/x` to the MCP application does not make it a Worker MCP
+endpoint: only exact `/mcp` selects the Worker's MCP route class.
+
+### B) Signed in — pending (not yet verified)
+
+| Check | Status |
+| --- | --- |
+| Browser Access login and live WebSocket updates | **Pending** |
+| Real ChatGPT OAuth: DCR using the exact callback and token `resource` | **Pending** |
+| Authenticated MCP read/write | **Pending** |
+| Cross-audience token rejection using real assertions in both directions | **Pending**; currently covered by unit tests only. |
 
 **Unverified:** the two apps share the `CF_Authorization` cookie name. Visiting
 `/mcp` in a browser may replace the dashboard cookie and require login again.
 Route-specific audience validation prevents token crossover even if that occurs.
+
+### Verify your deployment
+
+- [ ] Replace the example host below with your deployment host. Run without
+  cookies or tokens; do not follow redirects. `-q` ignores local curl config.
+  Compare statuses, `Location` (including `kid`) and `WWW-Authenticate` with A.
+
+  ```sh
+  DEPLOY_HOST='supervisor.example.com'
+  for path in / /api/state /api/ws /mcp /mcp/x; do
+    curl -q --http1.1 --max-time 15 -sS -D - -o /dev/null \
+      -H 'Cookie:' -H 'Authorization:' "https://$DEPLOY_HOST$path"
+  done
+  curl -q --http1.1 --max-time 15 -sS -D - -o /dev/null \
+    -H 'Cookie:' -H 'Authorization:' -H 'Connection: Upgrade' \
+    -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" "https://$DEPLOY_HOST/api/ws"
+  ```
+
+- [ ] Inspect discovery status and JSON. Both protected-resource responses must
+  identify exactly `https://$DEPLOY_HOST/mcp` and the configured team domain in
+  `authorization_servers`. Also fetch the exact `resource_metadata` URL advertised
+  by the MCP challenge with the same anonymous curl options.
+
+  ```sh
+  for path in /.well-known/oauth-protected-resource \
+    /.well-known/oauth-protected-resource/mcp \
+    /.well-known/oauth-authorization-server; do
+    curl -q --max-time 15 -sS -i -H 'Cookie:' -H 'Authorization:' "https://$DEPLOY_HOST$path"
+  done
+  ```
+
+- [ ] Read back both Access applications, DCR settings and Worker `ACCESS_AUDS`;
+  compare them with A. Anonymous probes alone cannot verify configuration or any
+  pending signed-in check in B.
 
 ## Migration from split mode
 
@@ -156,15 +203,16 @@ after capture; this change does not implement such a procedure. No wildcard or
 open-registration mode is introduced. Exact loopback callback support also
 remains unverified against the provider.
 
-## Separate-account acceptance still required
+## Remaining deployment acceptance
 
 Use only a separately authorized test account/zone, sample data and sanitized
-evidence. These steps are not run by local gates:
+evidence. The anonymous observations above cover only the isolated test stage.
+These remaining steps are not run by local gates:
 
 1. Review the actual plan; deploy one host and verify Access app destinations,
    OAuth configuration, exact DCR restrictions and disabled alternate Worker URLs.
-2. Probe dashboard/login redirects, unauthenticated MCP 401 with metadata challenge,
-   all discovery paths, expected `/mcp` resource and negative DCR requests.
+2. Repeat the anonymous checklist for your deployment and test negative DCR
+   requests; configuration readback alone does not prove DCR enforcement.
 3. Log in through the IdP; read data and observe a WebSocket update. Measure the
    cookie behavior after visiting `/mcp`.
 4. Connect ChatGPT at `https://<host>/mcp`; record client/version/date and callback,
@@ -174,5 +222,6 @@ evidence. These steps are not run by local gates:
    rollback without changing DO data. Tear down only test resources and read back
    their removal. Record any enrollment/billing step and exact token sufficiency.
 
-Single-host Access routing, cookie behavior, real connector compatibility and
-provider update behavior remain unverified until those steps pass.
+Anonymous Access routing and discovery were observed as recorded in A. Signed-in
+cookie behavior, real connector compatibility, real cross-audience assertion
+rejection and provider update/migration behavior remain pending.
