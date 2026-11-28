@@ -33,7 +33,7 @@ host, audience, principal or account defaults:
 | --- | --- |
 | `STORE` | New SQLite Durable Object namespace exporting `SupervisorStore`, with its SQLite migration. Each namespace uses the stable singleton key `supervisor-store-v1`. It starts empty. No existing namespace is imported or migrated. |
 | `ACCESS_TEAM_DOMAIN` | Trusted team hostname ending in `.cloudflareaccess.com`, without scheme/path. Issuer is `https://` plus this hostname; JWKS is the issuer's `/cdn-cgi/access/certs`. |
-| `ACCESS_AUDS` | JSON object mapping each exact request hostname to a nonempty array of nonempty Access audience strings. Obtain each value from its own new Access application. Both dashboard and MCP hosts must be explicitly configured. An absent, malformed or unknown host mapping fails closed; forwarded host headers are ignored. |
+| `ACCESS_AUDS` | JSON object mapping exact hostnames to route-class objects: `{ "supervisor.example.com": { "dashboard": ["dashboard-aud"], "mcp": ["mcp-aud"] } }`. Only the exact `/mcp` path selects `mcp`; every other path selects `dashboard`. A missing host/class, malformed list or foreign AUD fails closed; forwarded host headers are ignored. Legacy MCP hosts contain only `mcp`. Split mode explicitly assigns each host's AUD to both classes to preserve its historical host-wide acceptance. Old `{host: [aud]}` bindings are no longer accepted; deploy the generated binding with the Worker. |
 | `ALLOWED_EMAILS` | Private JSON object mapping lowercase, validated human email addresses to arrays containing `supervisor:read` and/or `supervisor:write`. Read and write capabilities are independent. Unknown principals are denied, and JWT scope claims do not grant capabilities. Match the edge Access policy to these configured humans. |
 
 Keep principal configuration and credentials out of tracked files, assets and
@@ -45,7 +45,7 @@ the optional `DISPLAY_TIMEZONE` binding selects an Intl timezone (for example
 remain UTC.
 
 Cloudflare Access must protect every path on each hostname. The Worker validates
-RS256 signatures, issuer, per-host audience, expiration and issued-at claims;
+RS256 signatures, issuer, audience for the host and route class, expiration and issued-at claims;
 human sessions require a nonempty subject and validated email. Service assertions
 are rejected as human viewers. Configure the trusted edge to supply
 `Cf-Access-Jwt-Assertion`; browser email headers, query parameters, local storage
@@ -102,14 +102,16 @@ The authenticated private/no-store response computes `waitingOnYou` for each
 viewer, and WebSocket invalidations make each viewer refetch that projection.
 The projection is never a stored field and never grants write access.
 
-## Clean-account configuration (deploy-free implementation)
+## Deployment configuration (offline-checked implementation)
 
 The resource graph is implemented and checked offline. No real account, minimal
 permission token or OAuth client flow has been validated yet. That is separate
 account-validation work. Use an independent account with Workers, SQLite Durable
 Objects and R2 enabled, a delegated DNS zone in that account, and an enrolled Zero
 Trust team. Zone/team creation and external IdP setup are prerequisites outside
-this graph. Do not point this installation at an existing deployment.
+this graph. For an existing split installation, follow the non-destructive
+[migration instructions](single-host.md#migration-from-split-mode) using the same
+SST state, app, stage and account. Do not use the replacement procedure below.
 
 Copy `examples/deploy.config.example.json` to the ignored `deploy.config.json`
 and replace every reserved example value privately. Set `SUPERVISOR_CONFIG` to
@@ -121,12 +123,14 @@ keys. Account selection is mandatory, so SST does not discover accounts.
 | Config field | Rules / default |
 | --- | --- |
 | `appName`, `stage` | Required lowercase names matching `[a-z][a-z0-9-]{0,19}`. Stage must equal the explicit SST CLI stage. Each app/stage has separate state and Worker namespace. `production` retains resources and enables SST removal protection. |
-| `zoneId`, `zoneName` | Required selected zone ID (32 lowercase hex digits) and DNS name. Both hosts must be strict subdomains of this zone. Account/zone ownership and absence of conflicts require the later account check. |
-| `dashboardHostname`, `mcpHostname` | Required distinct, exact lowercase DNS hostnames, without scheme, port, path, credentials or wildcard. Each Access app covers its entire hostname. |
+| `zoneId`, `zoneName` | Required selected zone ID (32 lowercase hex digits) and DNS name. All configured hosts must be strict subdomains of this zone. Account/zone ownership and absence of conflicts require the later account check. |
+| `hostname` | Single mode (recommended): one exact lowercase DNS hostname, without scheme, port, path, credentials or wildcard. Dashboard URL is `https://<host>/`; MCP URL is `https://<host>/mcp`. Mutually exclusive with the two split fields. |
+| `legacyMcpHostname` | Optional in single mode only; distinct from `hostname` and in the same zone. Keeps the old host-wide Managed OAuth app and custom domain for connected clients. The Worker permits only `/mcp` there. |
+| `dashboardHostname`, `mcpHostname` | Split mode: both required and distinct; mutually exclusive with `hostname` and `legacyMcpHostname`. Exact lowercase DNS hostnames. Each Access app covers its entire hostname; the Worker preserves each host's AUD acceptance on every path. |
 | `accessTeamDomain` | Required trusted team hostname ending in `.cloudflareaccess.com`; no scheme or path. |
 | `principals` | Required nonempty list of `{email, capabilities}`. Emails are validated and lowercased; duplicates are rejected. Capabilities are unique nonempty lists of `supervisor:read` and/or `supervisor:write`. These are independent. Subject-only authorization is not implemented by the current email-based runtime; issuer/subject remains available for attention matching. |
-| `policy.requires`, `policy.excludes` | Optional arrays (default empty). Each condition has exactly one selector: `{email:{email}}`, `{ip:{ip}}` (IP or CIDR), `{geo:{countryCode}}` (two uppercase letters), or `{loginMethod:{id}}` (OTP or IdP UUID). Requires are AND, excludes are NOT. Both new allow policies include exactly the configured principal emails (OR); a separate includes list, Everyone, bypass and service-token rules are rejected. |
-| `allowedIdps` | Nonempty unique list of `onetimepin` or UUIDs for IdPs already configured in the new team. Default `['onetimepin']`. No IdPs are created or copied. |
+| `policy.requires`, `policy.excludes` | Optional arrays (default empty). Each condition has exactly one selector: `{email:{email}}`, `{ip:{ip}}` (IP or CIDR), `{geo:{countryCode}}` (two uppercase letters), or `{loginMethod:{id}}` (OTP or IdP UUID). Requires are AND, excludes are NOT. All allow policies include exactly the configured principal emails (OR); a separate includes list, Everyone, bypass and service-token rules are rejected. |
+| `allowedIdps` | Nonempty unique list of `onetimepin` or UUIDs for IdPs already configured in the selected team. Default `['onetimepin']`. No IdPs are created or copied. |
 | `sessionDuration` | Dashboard/MCP Access session, default `24h`, maximum 744h. |
 | `oauthSessionDuration` | MCP OAuth grant session, default `336h`, maximum 744h. |
 | `oauthAccessTokenLifetime` | Default `15m`, maximum 24h and no longer than the grant session. All durations use positive integer `m` or `h` units. |
@@ -171,7 +175,7 @@ Keep app name, stage and account stable afterwards; changing them creates a
 separate installation. The graph does not adopt resources; resolve conflicting
 names/hosts before deployment instead of importing or replacing existing ownership.
 
-### Replacing an existing installation on the same hosts
+### Destructive replacement (not a split-to-single migration)
 
 The graph never adopts resources, so a deployment onto hostnames that are already
 in use conflicts with the existing Worker custom domains and Access applications.
@@ -185,24 +189,28 @@ applications, the SST state bucket) untouched. Then run the deploy sequence abov
 
 ### After deploying
 
-The new custom domains can take about a minute before DNS and TLS answer; until
-then requests to them may fail to connect. Unauthenticated probes should then show:
+New custom domains may need time before DNS and TLS answer. In single mode,
+"dashboard host" and "MCP host" below refer to the same configured `hostname`.
+These are acceptance criteria, not verified single-host results. Unauthenticated
+probes should show:
 
-- the dashboard host redirects (302) to your Access team login;
+- `/` on the dashboard host redirects (302) to your Access team login;
 - `/api/ws` on the dashboard host also redirects to Access;
 - `POST /mcp` on the MCP host without a token returns 401 with a
   `WWW-Authenticate` header that contains a `resource_metadata="<url>"` value;
 - fetching that exact `<url>` from the header returns 200 and its `resource`
   field equals `https://<mcp-host>/mcp`, including the `/mcp` path. Follow the
   header value rather than guessing a well-known path: the RFC 9728 path
-  `/.well-known/oauth-protected-resource/mcp` returns the same resource, but
-  `/.well-known/oauth-protected-resource` without `/mcp` describes only the
-  host and is not the value a client should check;
+  `/.well-known/oauth-protected-resource/mcp` was observed in the background
+  host-wide assessment, while the root resource metadata described only the
+  host. Recheck both on the path-scoped app; do not assume that behavior;
 - `/.well-known/oauth-authorization-server` on the MCP host returns 200.
 
 ### Connect a client and verify
 
-1. Add `https://<mcp-host>/mcp` as a connector in the MCP client named in
+1. In ChatGPT, add `https://<host>/mcp` as the connector URL in single mode
+   (`https://<mcp-host>/mcp` in split mode). For another MCP client, use the same
+   derived URL. The client must be named in
    `mcpClients` (or reconnect an existing connector). The client opens your
    Cloudflare Access team login; sign in through one of `allowedIdps` with a
    configured principal. Access then redirects back to the client's callback
@@ -225,12 +233,27 @@ then requests to them may fail to connect. Unauthenticated probes should then sh
 
 ## Resource and state boundary
 
-Two new `ZeroTrustAccessPolicy` resources feed two new self-hosted
-`ZeroTrustAccessApplication` resources. Each app's generated AUD feeds only its
-own hostname in `ACCESS_AUDS`; neither app accepts the other's audience. Only the
-MCP app enables Cloudflare Managed OAuth. Access owns discovery, registration,
-authorization and refresh; the Worker continues to validate Access assertions.
-See [Managed OAuth](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/).
+Single mode uses two independent allow policies and Access applications:
+
+| App | Destination | Managed OAuth | Worker audience |
+| --- | --- | --- | --- |
+| `DashboardAccess` | Whole `hostname` (`domain`) | Off; browser login | Dashboard class only |
+| `McpAccess` (or `McpPathAccess` during migration) | `destinations: [{type: "public", uri: "<host>/mcp"}, {type: "public", uri: "<host>/.well-known/*"}]` | On; exact DCR allowlist and configured grant/token lifetimes | MCP class only |
+
+The provider is pinned to `@pulumi/cloudflare` 6.24.0. Its public destination
+uses `uri` for hostname/path, not `hostname`. The whole-host dashboard app keeps
+its `domain` argument stable during migration. With `legacyMcpHostname`, the
+original `McpAccess`/`McpPolicy` remain host-wide on that host and the new
+path-scoped app/policy use `McpPathAccess`/`McpPathPolicy`.
+
+Access owns discovery, registration, authorization and refresh. If a discovery
+request reaches the Worker, it returns no OAuth metadata (404 for an authorized
+dashboard assertion, 403 for a wrong class); there is no second OAuth server.
+**Unverified:** whether Access serves Managed OAuth discovery from a path-scoped
+app with a `/.well-known/*` destination and reports the expected `/mcp` resource.
+Do not claim this works at the edge until separate-account acceptance succeeds.
+See the [single-host assessment and test plan](single-host.md) and provider
+[Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/).
 
 One `sst.cloudflare.Worker` builds `apps/worker/src/worker.ts`, creates the SQLite
 `SupervisorStore` class with migration `v1`, and binds `STORE` locally to that
@@ -241,9 +264,9 @@ authenticated MCP writes later. No old state, resource lookup or import is used.
 
 Worker `url:false` disables workers.dev via SST. The explicit
 `WorkersScriptSubdomain` disables both workers.dev and version previews after the
-Worker component (including SST's URL control). Two `WorkersCustomDomain`
-resources explicitly enable hostname routing and disable custom-domain previews,
-and bind the configured zone/hosts to that Worker only after the Access
+Worker component (including SST's URL control). Custom domains explicitly enable
+hostname routing and disable previews: one in single mode, two with a legacy host
+or in split mode. They bind the configured zone/hosts to that Worker after the Access
 apps and alternate-URL controls. There are no duplicate SST domain declarations,
 DNS record resources, tunnels, KV or D1. The only stack outputs are the two URLs.
 Tests use Pulumi provider mocks plus an SST component double; they check our
@@ -270,9 +293,11 @@ Scope account grants to the **new account only** and zone grants to the
 | Scope | Permission | Used by |
 | --- | --- | --- |
 | Account | Workers Scripts Write (dashboard may say Edit), or Workers product Admin under the newer role model | New Worker creation/upload/read, SQLite DO binding/migration, secret binding, SST script migration reads and subdomain/preview controls. An existing-Worker editor cannot create a new Worker. |
-| Account | Access: Apps and Policies Write (Edit) | Both new policies/apps, Managed OAuth and AUD readback. |
+| Account | Access: Apps and Policies Write (Edit) | Policies/apps, Managed OAuth and AUD readback. |
+| Account | Access: Organizations Read | Proposed read-only preflight: discover the existing organization's `auth_domain`. |
+| Account | Access: Identity Providers Read | Proposed read-only preflight: list existing usable IdPs; existence does not prove login. |
 | Account | Workers R2 Storage Write (Edit) | SST home bucket bootstrap, state objects, locks and encryption metadata. |
-| Zone | Workers Routes Write (Edit) | Both custom domains. |
+| Zone | Workers Routes Write (Edit) | Worker custom domain(s). |
 | Zone | Zone Read | Selected-zone validation/provider resolution. |
 
 This list follows Cloudflare's
@@ -284,6 +309,35 @@ User Details, Memberships, token creation or IdP creation grant is needed by the
 intended calls. Exact token sufficiency still requires the separate-account
 validation; if a pinned tool makes an additional call, record it and scope the
 permission before claiming validation. Do not start with a broad Workers template.
+
+## Manual provider and client steps
+
+The current graph consumes private config; an interactive installer and its
+read-only preflight are a proposal, not implemented automation. Before a later
+authorized deployment:
+
+1. Activate the DNS zone on Cloudflare, including the registrar nameserver change
+   if needed.
+2. Create/enroll a Zero Trust organization and choose a plan in the dashboard.
+   **Unverified:** whether a new Free-plan enrollment asks for a payment method,
+   and whether a brand-new organization can be created by API.
+3. Configure an IdP (one-time PIN is sufficient) and verify the intended human
+   login. The deployment token does not create IdPs or organizations.
+4. Create the narrowly scoped deployment API token manually. No token-minting
+   bootstrap permission is required.
+5. Set the principal's actual IdP login email privately. An account-profile email
+   may differ and must not silently replace it.
+6. After deployment, log in through a browser; check `/api/data.json` and a live
+   `/api/ws` update from the same dashboard session.
+7. Add the ChatGPT connector at `https://<host>/mcp` and approve consent. Verify a
+   read and a revisioned sample write, then observe its dashboard update.
+
+Proposed preflight checks are read-only: exact active zone, free hostname, existing
+organization/team domain, usable IdP, token permission scope and SST home. They
+must fail before writes on missing prerequisites. A migration must instead
+recognize the existing resources owned by the same stack; a generic "hostname
+free" check is inappropriate there. API presence of an IdP cannot prove login.
+These checks and exact permission sufficiency remain separate-account work.
 
 ## Exact MCP callbacks
 

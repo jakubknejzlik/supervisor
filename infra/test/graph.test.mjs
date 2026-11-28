@@ -47,6 +47,8 @@ beforeAll(async () => {
   vi.stubGlobal('fetch', () => { throw new Error('Network is forbidden in resource mocks'); });
   vi.stubGlobal('sst', { cloudflare: { Worker: WorkerDouble } });
   const input = JSON.parse(readFileSync('examples/deploy.config.example.json', 'utf8'));
+  delete input.hostname;
+  Object.assign(input, { dashboardHostname: 'dashboard.example.invalid', mcpHostname: 'mcp.example.invalid' });
   input.allowLocalProbe = true;
   input.mcpClients.push({ client: 'chatgpt', callbackUris: ['https://chatgpt.com/connector/oauth/sample-callback', 'https://chatgpt.com/connector_platform_oauth_redirect'] }, { client: 'local-probe', callbackUris: ['http://127.0.0.1:8788/callback'] });
   input.policy = { requires: [{ ip: { ip: '192.0.2.0/24' } }], excludes: [{ email: { email: 'excluded@example.invalid' } }] };
@@ -88,7 +90,7 @@ it('maps only each new application AUD to its own exact hostname', async () => {
   expect(await value(graph.access[0].app.domain)).toBe(config.dashboardHostname);
   expect(await value(graph.access[1].app.domain)).toBe(config.mcpHostname);
   const audiences = JSON.parse(bindings.find(binding => binding.name === 'ACCESS_AUDS').text);
-  expect(audiences).toEqual({ [config.dashboardHostname]: ['DashboardAccess-new-aud'], [config.mcpHostname]: ['McpAccess-new-aud'] });
+  expect(audiences).toEqual({ [config.dashboardHostname]: { dashboard: ['DashboardAccess-new-aud'], mcp: ['DashboardAccess-new-aud'] }, [config.mcpHostname]: { dashboard: ['McpAccess-new-aud'], mcp: ['McpAccess-new-aud'] } });
   expect(audiences[config.dashboardHostname]).not.toEqual(audiences[config.mcpHostname]);
 });
 it('enables Managed OAuth only on MCP with the exact configured callback union', async () => {

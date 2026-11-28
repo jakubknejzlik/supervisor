@@ -20,6 +20,8 @@ export function createWorker(testKey?: JWTVerifyGetKey): ExportedHandler<Env> {
       try { identity = await authenticate(request, env, testKey); }
       catch (e) { return Response.json({ error: 'forbidden' }, { status: e instanceof AuthError ? e.status : 403, headers }); }
       const locale = negotiateLocale(request.headers.get('Accept-Language'));
+      // Access owns discovery. Never serve metadata or an asset at these paths.
+      if (url.pathname.startsWith('/.well-known/')) return new Response(null, { status: 404, headers });
       // No OAuth routes or WWW-Authenticate here: Cloudflare Access owns both.
       if (url.pathname === '/api/ws') {
         if (!identity.capabilities.includes('supervisor:read')) return Response.json({ error: 'insufficient_scope' }, { status: 403, headers });

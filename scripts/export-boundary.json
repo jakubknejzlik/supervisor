@@ -348,6 +348,18 @@
     {
       "from": "scripts/export-templates/checks.yml",
       "to": ".github/workflows/ci.yml"
+    },
+    {
+      "from": "docs/single-host.md",
+      "to": "docs/single-host.md"
+    },
+    {
+      "from": "infra/test/modes.test.mjs",
+      "to": "infra/test/modes.test.mjs"
+    },
+    {
+      "from": "apps/worker/test/routes.test.mjs",
+      "to": "apps/worker/test/routes.test.mjs"
     }
   ]
 }

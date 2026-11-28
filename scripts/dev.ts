@@ -8,12 +8,15 @@ import { schemas } from '@supervisor/core/schema';
 
 const smoke = process.argv.includes('--smoke');
 const keys = await fixture();
-const token = await keys.token({ exp: Math.floor(Date.now() / 1000) + 86400 });
+const audiences = { dashboard: ['local-dashboard'], mcp: ['local-mcp'] };
+const assertions = Object.fromEntries(await Promise.all(Object.entries(audiences).map(async ([kind, aud]) => [
+  kind, await keys.token({ aud, exp: Math.floor(Date.now() / 1000) + 86400 }),
+])));
 await mkdir('.local/dev', { recursive: true });
 let mf!: Awaited<ReturnType<typeof runtime>>;
 async function start() {
   await buildAssets();
-  mf = await runtime(keys.jwks, { port: smoke ? 0 : 8787, persist: resolve('.local/dev'), extraBindings: { TEST_LOCAL_ASSERTION: token } });
+  mf = await runtime(keys.jwks, { port: smoke ? 0 : 8787, persist: resolve('.local/dev'), audiences: { '127.0.0.1': audiences, localhost: audiences }, extraBindings: { TEST_LOCAL_ASSERTION: JSON.stringify(assertions) } });
   return await mf.ready;
 }
 const url = await start();

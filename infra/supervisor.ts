@@ -4,7 +4,18 @@ import { loadDeploymentConfig, type DeploymentConfig } from './config';
 
 // Only constructors for new resources. No resource lookup, adoption or data seed.
 export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
-  const access = ['Dashboard', 'Mcp'].map(kind => {
+  const single = 'hostname' in config;
+  const dashboardHost = single ? config.hostname : config.dashboardHostname;
+  const mcpHost = single ? config.hostname : config.mcpHostname;
+  const legacyHost = single ? config.legacyMcpHostname : undefined;
+  // Preserve all existing host-wide resource arguments and logical names during
+  // migration. Only the new path app/policy are added to the existing graph.
+  const specs = [
+    { kind: 'Dashboard', host: dashboardHost, path: false, oauth: false },
+    ...(legacyHost ? [{ kind: 'Mcp', host: legacyHost, path: false, oauth: true }] : []),
+    { kind: legacyHost ? 'McpPath' : 'Mcp', host: mcpHost, path: single, oauth: true },
+  ];
+  const access = specs.map(({ kind, host, path, oauth }) => {
     const policy = new cf.ZeroTrustAccessPolicy(`${kind}Policy`, {
       accountId: config.accountId, name: `${config.appName}-${config.stage}-${kind.toLowerCase()}`,
       decision: 'allow',
@@ -14,10 +25,14 @@ export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
     });
     const app = new cf.ZeroTrustAccessApplication(`${kind}Access`, {
       accountId: config.accountId, name: `${config.appName}-${config.stage}-${kind.toLowerCase()}`,
-      type: 'self_hosted', domain: kind === 'Dashboard' ? config.dashboardHostname : config.mcpHostname,
+      type: 'self_hosted',
+      ...(path ? { destinations: [
+        { type: 'public', uri: `${host}/mcp` },
+        { type: 'public', uri: `${host}/.well-known/*` },
+      ] } : { domain: host }),
       appLauncherVisible: false, allowedIdps: config.allowedIdps, sessionDuration: config.sessionDuration,
       policies: [{ id: policy.id, precedence: 1 }],
-      oauthConfiguration: kind === 'Mcp' ? {
+      oauthConfiguration: oauth ? {
         enabled: true,
         dynamicClientRegistration: {
           enabled: true, allowedUris: config.mcpClients.flatMap(client => client.callbackUris),
@@ -28,8 +43,13 @@ export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
     });
     return { policy, app };
   });
-  const audiences = all(access.map(({ app }) => app.aud)).apply(([dashboard, mcp]) => JSON.stringify({
-    [config.dashboardHostname]: [dashboard], [config.mcpHostname]: [mcp],
+  const audiences = all(access.map(({ app }) => app.aud)).apply(auds => JSON.stringify(single ? {
+    [dashboardHost]: { dashboard: [auds[0]], mcp: [auds.at(-1)] },
+    ...(legacyHost ? { [legacyHost]: { mcp: [auds[1]] } } : {}),
+  } : {
+    // Split mode historically accepts its host's AUD on every path.
+    [dashboardHost]: { dashboard: [auds[0]], mcp: [auds[0]] },
+    [mcpHost]: { dashboard: [auds[1]], mcp: [auds[1]] },
   }));
   const worker = new sst.cloudflare.Worker('Supervisor', {
     accountId: config.accountId, handler: 'apps/worker/src/worker.ts', url: false,
@@ -51,13 +71,14 @@ export function supervisor(config: DeploymentConfig = loadDeploymentConfig()) {
     accountId: config.accountId, scriptName: worker.nodes.worker.scriptName,
     enabled: false, previewsEnabled: false,
   }, { dependsOn: [worker] });
-  const domains = [config.dashboardHostname, config.mcpHostname].map((hostname, index) => new cf.WorkersCustomDomain(
+  const domainHosts = [dashboardHost, ...(single ? (legacyHost ? [legacyHost] : []) : [mcpHost])];
+  const domains = domainHosts.map((hostname, index) => new cf.WorkersCustomDomain(
     index === 0 ? 'DashboardDomain' : 'McpDomain', {
       accountId: config.accountId, zoneId: config.zoneId, hostname, service: worker.nodes.worker.scriptName,
       environment: 'production', enabled: true, previewsEnabled: false,
     }, { dependsOn: [...access.map(({ app }) => app), alternateUrls] },
   ));
   // Expose endpoints only; principals, AUDs and token are never stack outputs.
-  return { dashboardUrl: `https://${config.dashboardHostname}`, mcpUrl: `https://${config.mcpHostname}/mcp`,
+  return { dashboardUrl: `https://${dashboardHost}`, mcpUrl: `https://${mcpHost}/mcp`,
     worker, access, alternateUrls, domains };
 }

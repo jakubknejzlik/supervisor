@@ -3,8 +3,7 @@
   "stage": "test",
   "zoneId": "00000000000000000000000000000000",
   "zoneName": "example.invalid",
-  "dashboardHostname": "dashboard.example.invalid",
-  "mcpHostname": "mcp.example.invalid",
+  "hostname": "supervisor.example.invalid",
   "accessTeamDomain": "team-example.cloudflareaccess.com",
   "principals": [
     { "email": "reviewer@example.invalid", "capabilities": ["supervisor:read"] },

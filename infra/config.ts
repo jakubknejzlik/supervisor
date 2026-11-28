@@ -23,13 +23,11 @@ const condition = z.union([
   z.object({ geo: z.object({ countryCode: z.string().regex(/^[A-Z]{2}$/) }).strict() }).strict(),
   z.object({ loginMethod: z.object({ id: idp }).strict() }).strict(),
 ]);
-const schema = z.object({
+const common = z.object({
   appName: name,
   stage: name,
   zoneId: id,
   zoneName: hostname,
-  dashboardHostname: hostname,
-  mcpHostname: hostname,
   accessTeamDomain: z.string().regex(/^[a-z0-9-]+\.cloudflareaccess\.com$/),
   principals: z.array(z.object({
     email: emailAddress,
@@ -50,11 +48,21 @@ const schema = z.object({
   displayTimezone: z.string().refine(value => {
     try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
   }).default('UTC'),
-}).strict().superRefine((config, ctx) => {
+}).strict();
+// Strict alternatives reject partial modes and any mixture of their fields.
+const schema = z.union([
+  common.extend({ hostname, legacyMcpHostname: hostname.optional() }).strict(),
+  common.extend({ dashboardHostname: hostname, mcpHostname: hostname }).strict(),
+]).superRefine((config, ctx) => {
   const reject = (path: string) => ctx.addIssue({ code: 'custom', path: [path], message: 'Invalid deployment setting' });
-  if (config.dashboardHostname === config.mcpHostname) reject('mcpHostname');
-  for (const key of ['dashboardHostname', 'mcpHostname'] as const) {
-    if (!config[key].endsWith('.' + config.zoneName)) reject(key);
+  const hosts = 'hostname' in config
+    ? { hostname: config.hostname, legacyMcpHostname: config.legacyMcpHostname }
+    : { dashboardHostname: config.dashboardHostname, mcpHostname: config.mcpHostname };
+  if ('hostname' in config) {
+    if (config.legacyMcpHostname === config.hostname) reject('legacyMcpHostname');
+  } else if (config.dashboardHostname === config.mcpHostname) reject('mcpHostname');
+  for (const [key, host] of Object.entries(hosts)) {
+    if (host !== undefined && !host.endsWith('.' + config.zoneName)) reject(key);
   }
   if (seconds(config.oauthAccessTokenLifetime) > seconds(config.oauthSessionDuration)) reject('oauthAccessTokenLifetime');
   const seen = new Set<string>();

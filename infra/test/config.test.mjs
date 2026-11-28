@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { parseDeploymentConfig, loadDeploymentConfig } from '../config.ts';
-const example = () => JSON.parse(readFileSync('examples/deploy.config.example.json', 'utf8'));
+const single = () => JSON.parse(readFileSync('examples/deploy.config.example.json', 'utf8'));
+const example = () => { const input = single(); delete input.hostname; return { ...input, dashboardHostname: 'dashboard.example.invalid', mcpHostname: 'mcp.example.invalid' }; };
 const account = '00000000000000000000000000000000';
 const parse = value => parseDeploymentConfig(value, account, 'test');
 afterEach(() => vi.unstubAllEnvs());
@@ -84,4 +85,27 @@ it('requires private config selection and redacts file errors', () => {
   vi.stubEnv('SUPERVISOR_CONFIG', 'missing-private-config'); expect(() => loadDeploymentConfig()).toThrow('Path and values redacted');
   vi.stubEnv('SUPERVISOR_CONFIG', 'examples/deploy.config.example.json'); vi.stubEnv('CLOUDFLARE_DEFAULT_ACCOUNT_ID', account);
   expect(loadDeploymentConfig('test').stage).toBe('test');
+});
+
+it('accepts the single-host example and optional distinct legacy host', () => {
+  expect(parse(single()).hostname).toBe('supervisor.example.invalid');
+  expect(parse({ ...single(), legacyMcpHostname: 'mcp.example.invalid' }).legacyMcpHostname).toBe('mcp.example.invalid');
+});
+for (const [label, change] of [
+  ['missing mode', c => delete c.hostname],
+  ['single plus dashboard', c => c.dashboardHostname = 'dashboard.example.invalid'],
+  ['single plus MCP', c => c.mcpHostname = 'mcp.example.invalid'],
+  ['both modes', c => Object.assign(c, { dashboardHostname: 'dashboard.example.invalid', mcpHostname: 'mcp.example.invalid' })],
+  ['same legacy host', c => c.legacyMcpHostname = c.hostname],
+  ['legacy outside zone', c => c.legacyMcpHostname = 'mcp.other.invalid'],
+  ['single outside zone', c => c.hostname = 'app.other.invalid'],
+  ['zone apex', c => c.hostname = c.zoneName],
+  ['single URL', c => c.hostname = 'https://supervisor.example.invalid'],
+  ['single wildcard', c => c.hostname = '*.example.invalid'],
+  ['legacy URL', c => c.legacyMcpHostname = 'https://mcp.example.invalid'],
+]) it(`rejects ${label}`, () => {
+  const input = single(); change(input); expect(() => parse(input)).toThrow('Values redacted');
+});
+it('rejects legacy host in split mode', () => {
+  expect(() => parse({ ...example(), legacyMcpHostname: 'old.example.invalid' })).toThrow('Values redacted');
 });

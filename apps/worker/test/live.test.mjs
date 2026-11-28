@@ -5,7 +5,7 @@ let keys, mf, owner, service;
 beforeAll(async () => {
   keys = await fixture(); owner = await keys.token();
   service = await keys.token({ aud: 'import-audience', email: undefined, sub: '', common_name: 'test-service.access' });
-  mf = await runtime(keys.jwks, { audiences: { '127.0.0.1': ['test-audience', 'import-audience'], 'dashboard.example.com': ['dashboard-aud', 'import-audience'], 'mcp.example.com': ['live-aud'] } });
+  mf = await runtime(keys.jwks, { audiences: Object.fromEntries(Object.entries({ '127.0.0.1': ['test-audience', 'import-audience'], 'dashboard.example.com': ['dashboard-aud', 'import-audience'], 'mcp.example.com': ['live-aud'] }).map(([host, auds]) => [host, { dashboard: auds, mcp: auds }])) });
 });
 afterAll(async () => { await mf?.dispose(); });
 const headers = assertion => ({ 'Cf-Access-Jwt-Assertion': assertion });
