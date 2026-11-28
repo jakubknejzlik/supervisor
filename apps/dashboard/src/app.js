@@ -101,7 +101,7 @@ if (typeof document !== 'undefined') {
   const $ = (id) => /** @type {any} */ (document.getElementById(id));
   const controls = { search: $('search'), state: $('state'), sort: $('sort'), done: $('include-done'), you: $('waiting-you') };
   const params = new URLSearchParams(location.search);
-  let category = params.get('category') ?? params.get('agent');
+  let category = params.get('category');
   const fold = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const formatDate = value => formatTimestamp(value, locale, data.timezone || 'UTC');
   const stateLabel = record => record.generatedLabels?.state ? t(record.generatedLabels.state, record.generatedLabels.values) : record.stateLabel || t(stateKey(record.state));

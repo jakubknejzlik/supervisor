@@ -56,9 +56,8 @@ Omitting the key preserves its current value. No other patch semantics change.
 The shared pure `effectiveCategory(record)` returns a valid trimmed category,
 otherwise the existing `agent || project` display group, otherwise `null`.
 This fallback runs only on reads: no migration, backfill or record rewrite occurs.
-Legacy records keep the same tabs and counts. `get_record` and `list_records`
-return stored data unchanged, including missing or null category values; neither
-injects a derived category into `data`.
+`get_record` and `list_records` return stored data unchanged, including missing
+or null category values; neither injects a derived category into `data`.
 
 `list_records` accepts an optional `category` string with the same validation
 and trimming rules (no null). It matches `effectiveCategory` exactly, including
@@ -67,7 +66,6 @@ are combined before applying `limit`; results remain ordered by ID.
 
 The dashboard filters and searches by effective category while keeping agent
 metadata. Distinct category tags accompany agent tags in rows and details.
-Selection uses the `category` URL parameter; the legacy `agent` parameter is
-accepted on load and rewritten to `category` (the explicit parameter wins).
+Selection uses only the `category` URL parameter.
 Reloads and live updates preserve selection while the category exists; when
 it disappears, selection resets to All.

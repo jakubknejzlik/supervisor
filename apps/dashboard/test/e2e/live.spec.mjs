@@ -484,36 +484,19 @@ test('empty store displays only the All actor tab', async ({ browser }) => {
   } finally { await context.close(); await empty.dispose(); }
 });
 
-test('legacy production-shaped records retain their exact tab set and counts; agent URL is canonicalized', async ({ page }) => {
-  const row = { kind: 'Task', state: 'running', links: {} };
+test('mixed data uses category before agent/project in tabs, tags and search', async ({ page }) => {
   await filterFixture(page, [
-    { ...row, id: 'legacy:1', name: 'First', agent: 'Agent A', project: 'sample-a', owner: 'Operator A' },
-    { ...row, id: 'legacy:2', name: 'Second', agent: 'Agent A', project: 'sample-b', owner: 'Operator B' },
-    { ...row, id: 'legacy:3', name: 'Third', agent: 'Agent B', project: 'sample-a', owner: 'Operator A' },
-    { ...row, id: 'legacy:4', name: 'Fourth', project: 'sample-c', owner: 'Operator C' },
-    { ...row, id: 'legacy:5', name: 'Fifth', agent: '', project: 'sample-c', owner: 'Operator C' },
-    { ...row, id: 'legacy:6', name: 'Sixth', owner: 'Operator D' },
-  ]);
-  await expect(page.locator('.agent-tabs button')).toHaveText(['All 6', 'Agent A 2', 'Agent B 1', 'sample-c 2']);
-  await page.goto('http://filters.test/?agent=Agent+A');
-  await expect(page).toHaveURL('http://filters.test/?category=Agent+A');
-  await expect(page.locator('[data-category="Agent A"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#rows .summary-row')).toHaveCount(2);
-  await page.reload();
-  await expect(page.locator('[data-category="Agent A"]')).toHaveAttribute('aria-pressed', 'true');
-  await page.goto('http://filters.test/?agent=Agent+A&category=sample-c');
-  await expect(page).toHaveURL('http://filters.test/?category=sample-c');
-  await expect(page.locator('[data-category="sample-c"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#rows .summary-row')).toHaveCount(2);
-});
-
-test('explicit category adds distinct row/detail tags, keeps agent/owner, and is searchable', async ({ page }) => {
-  await filterFixture(page, [
-    { id: 'category:distinct', name: 'Categorized task', agent: 'Agent A', owner: 'Operator', category: 'Operations', state: 'running' },
+    { id: 'category:distinct', name: 'Categorized task', agent: 'Agent A', project: 'sample-a', owner: 'Operator', category: 'Operations', state: 'running' },
     { id: 'category:same', name: 'Same label', agent: 'Agent B', category: 'Agent B', state: 'running' },
+    { id: 'category:agent', name: 'Agent fallback', agent: 'Agent C', project: 'sample-c', state: 'running' },
+    { id: 'category:project', name: 'Project fallback', project: 'sample-d', state: 'running' },
   ]);
   await expect(page.getByRole('group', { name: 'Filter by category' })).toBeVisible();
-  await expect(page.locator('.agent-tabs button')).toHaveText(['All 2', 'Agent B 1', 'Operations 1']);
+  await expect(page.locator('.agent-tabs button')).toHaveText(['All 4', 'Agent B 1', 'Agent C 1', 'Operations 1', 'sample-d 1']);
+  await page.locator('[data-category="Operations"]').click();
+  await expect(page.locator('#rows .summary-row')).toHaveCount(1);
+  await expect(page.locator('[data-record-id="category:distinct"]')).toBeVisible();
+  await page.locator('[data-category=""]').click();
   const row = page.locator('[data-record-id="category:distinct"]');
   await expect(row.locator('.agent-tag:not(.category-tag)')).toHaveText('Agent A');
   await expect(row.locator('.category-tag')).toHaveText('Operations');

@@ -29,6 +29,14 @@ async function create(id, patch = {}) {
 async function audit(id) { return (await tool('get_audit', { recordId: id })).value; }
 
 describe('SQLite DO via real MCP SDK', () => {
+  it('collects the first category match after earlier nonmatching IDs with limit 1', async () => {
+    const prefix = 'synthetic:category-limit:';
+    await create(prefix + '0', { category: 'Other', agent: 'Operations' });
+    await create(prefix + '1', { category: 'Other', project: 'Operations' });
+    const first = await create(prefix + '2', { category: 'Operations', agent: 'Agent A', project: 'sample' });
+    await create(prefix + '3', { category: 'Operations' });
+    expect((await tool('list_records', { prefix, category: 'Operations', limit: 1 })).value).toEqual([first]);
+  });
   it('round-trips category, filters before limit, and clears to the legacy fallback without changing attribution', async () => {
     const prefix = 'synthetic:category:';
     const legacy = { agent: 'Agent A', project: 'sample', owner: 'Operator', extra: { keep: true } };

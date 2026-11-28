@@ -33,17 +33,3 @@ it('projects category then the original agent/project fallback without mutation'
   expect(effectiveCategory({ agent: '', project: 'sample' })).toBe('sample');
   expect(effectiveCategory({ owner: 'Operator', group: 'Ignored' })).toBeNull();
 });
-
-it('preserves the legacy production-shaped tab set and counts', () => {
-  const records = [
-    { agent: 'Agent A', project: 'sample-a', owner: 'Operator A' },
-    { agent: 'Agent A', project: 'sample-b', owner: 'Operator B' },
-    { agent: 'Agent B', project: 'sample-a', owner: 'Operator A' },
-    { project: 'sample-c', owner: 'Operator C' },
-    { agent: '', project: 'sample-c', owner: 'Operator C' },
-    { owner: 'Operator D' },
-  ].map(Object.freeze);
-  const counts = values => [...new Set(values.filter(Boolean))].sort().map(value => [value, values.filter(item => item === value).length]);
-  expect(counts(records.map(effectiveCategory))).toEqual(counts(records.map(record => record.agent || record.project)));
-  expect(counts(records.map(effectiveCategory))).toEqual([['Agent A', 2], ['Agent B', 1], ['sample-c', 2]]);
-});

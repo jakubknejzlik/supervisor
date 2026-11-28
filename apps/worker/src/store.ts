@@ -78,8 +78,14 @@ export class SupervisorStore extends DurableObject<StoreEnv> {
       const { prefix = '', category, limit = 100 } = args as { prefix?: string; category?: string; limit?: number };
       // instr treats %/_ literally and handles Unicode prefixes without JS length.
       if (category !== undefined) {
-        return sql.exec<Row>('SELECT * FROM records WHERE instr(id, ?) = 1 ORDER BY id', prefix).toArray()
-          .map(decode).filter(record => effectiveCategory(record.data) === category).slice(0, limit);
+        const matches: RecordValue[] = [];
+        for (const row of sql.exec<Row>('SELECT * FROM records WHERE instr(id, ?) = 1 ORDER BY id', prefix)) {
+          const record = decode(row);
+          if (effectiveCategory(record.data) !== category) continue;
+          matches.push(record);
+          if (matches.length === limit) break;
+        }
+        return matches;
       }
       return sql.exec<Row>('SELECT * FROM records WHERE instr(id, ?) = 1 ORDER BY id LIMIT ?', prefix, limit).toArray().map(decode);
     }
